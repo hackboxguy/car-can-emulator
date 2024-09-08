@@ -1,5 +1,8 @@
 # car-can-emulator
-CAN bus emulator for testing OBD2 devices
+CAN bus emulator for testing OBD2 devices such as Head-up-displays/car-TCUs/etc. For those of you developing CAN devices for the carbut want to avoid sitting in an actual card for testing their CAN solution.
+
+# Connection Diagram
+![connection-diagram](/images/connection-diagram.png "connection-diagram")
 
 # how to build and test
 1. Plugin Canable usb-to-can dongle to your linux pc
