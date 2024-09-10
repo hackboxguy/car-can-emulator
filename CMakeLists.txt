@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 set(COMPONENT_NAME car-can-emulator)
-#set(COMPONENT_STARTUP_SCRIPT S59TouchBlinkServer)
+set(WRTSTARTUP_SCRIPT WrtCarCanEmulatorStartupScr) #startup script for openwrt based system
 project(${COMPONENT_NAME})
 
 set(CMAKE_CXX_STANDARD 11)
@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD 11)
 add_executable(${PROJECT_NAME} car-can-emulator.cpp)
 target_link_libraries(${PROJECT_NAME} pthread) #${LIBEVDEV_LIBRARIES})
 install(TARGETS ${COMPONENT_NAME} DESTINATION usr/sbin)
-#install(PROGRAMS ${COMPONENT_STARTUP_SCRIPT} DESTINATION etc/init.d) #copy server's startup script to init.d
+install(PROGRAMS ${WRTSTARTUP_SCRIPT} DESTINATION etc/init.d) #copy server's startup script to init.d
 
 #for cross compiling
 #cmake -H. -BOutput -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain-arm-backup.cmake -DCMAKE_INSTALL_PREFIX=/home/user/tmp/

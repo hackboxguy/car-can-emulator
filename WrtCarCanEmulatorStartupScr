@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+# "new(er)" style init script
+# Look at /lib/functions/service.sh on a running system for explanations of what other SERVICE_
+# options you can use, and when you might want them.
+
+START=91
+APP=/usr/sbin/car-can-emulator
+SERVICE_WRITE_PID=1
+SERVICE_DAEMONIZE=1
+
+start() {
+	ip link set up can0 type can bitrate 500000
+	ifconfig can0 up
+	ifconfig can0
+	#start server only if can0 node exists	
+	if [ $? = 0 ]; then
+        	service_start $APP --node=can0
+	fi
+}
+
+stop() {
+	ifconfig can0 down
+        service_stop $APP
+}
