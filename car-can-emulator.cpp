@@ -28,6 +28,7 @@ using namespace std;
 std::atomic<bool> running(true);
 
 unsigned short obd_speed=0x0058,obd_temp=35,obd_rpm=12,obd_flow=0x0540;//default-flow 5.4l/100km
+unsigned char obd_intake=0,obd_load=0;
 /*****************************************************************************/
 // Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
 void handle_signal(int signal) {
@@ -147,7 +148,27 @@ void socket_listener()
                 else 
                     obd_flow=atoi(cmdArg.c_str());	
             }
-            close(new_socket);
+            else if(cmd == "intake")
+            {
+                if(cmdArg.length()<=0)
+                {
+                    sprintf(buffer,"%d\n",obd_intake);
+                    write(new_socket,buffer,strlen(buffer));
+                }
+                else
+                    obd_intake=atoi(cmdArg.c_str());
+            }
+            else if(cmd == "load")
+            {
+                if(cmdArg.length()<=0)
+                {
+                    sprintf(buffer,"%d\n",obd_load);
+                    write(new_socket,buffer,strlen(buffer));
+                }
+                else
+                    obd_load=atoi(cmdArg.c_str());
+            }
+	    close(new_socket);
         }
     }
     close(sockfd);
@@ -228,6 +249,8 @@ void canbus_listener(bool debugprint,std::string node)
                 frame.data[2]=req_field;
                 switch(req_field)
                 {
+                    case 0x04:frame.data[0]=0x03;frame.data[3]=obd_load;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//load
+                    case 0x0B:frame.data[0]=0x03;frame.data[3]=obd_intake;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//intake
                     case 0x10:frame.data[0]=0x04;frame.data[3]=(obd_flow>>8);frame.data[4]=obd_flow&0x00FF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//air-flow rate
                     case 0x05:frame.data[0]=0x03;frame.data[3]=obd_temp&0x00FF;frame.data[4]=(obd_temp>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine coolant temp
                     case 0x0D:frame.data[0]=0x03;frame.data[3]=obd_speed&0x00FF;frame.data[4]=(obd_speed>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//vehicle speed
