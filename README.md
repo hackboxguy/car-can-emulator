@@ -1,5 +1,5 @@
 # car-can-emulator
-CAN bus emulator for testing OBD2 devices such as Head-up-displays/car-TCUs/etc. For those of you developing CAN devices for the carbut want to avoid sitting in an actual card for testing their CAN solution.
+CAN bus emulator for testing OBD2 devices such as Head-up-displays/car-TCUs/etc. For those of you developing CAN devices for the car but want to avoid sitting in an actual car for testing their CAN solution.
 
 # Connection Diagram
 ![connection-diagram](/images/connection-diagram.png "connection-diagram")
