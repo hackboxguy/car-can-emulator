@@ -143,18 +143,28 @@ void socket_listener(bool bind_all, int port)
             std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
             long val = 0;
-            for (auto &p : obd_params)
+            if (cmd == "list")
             {
-                if (cmd == p.name)
+                std::string response;
+                for (auto &p : obd_params)
+                    response += std::string(p.name) + "=" + std::to_string(p.var->load()) + "\n";
+                write(new_socket, response.c_str(), response.size());
+            }
+            else
+            {
+                for (auto &p : obd_params)
                 {
-                    if (cmdArg.empty())
+                    if (cmd == p.name)
                     {
-                        snprintf(buffer, sizeof(buffer), "%d\n", p.var->load());
-                        write(new_socket, buffer, strlen(buffer));
+                        if (cmdArg.empty())
+                        {
+                            snprintf(buffer, sizeof(buffer), "%d\n", p.var->load());
+                            write(new_socket, buffer, strlen(buffer));
+                        }
+                        else if (parse_int(cmdArg, val, p.min_val, p.max_val))
+                            p.var->store(val);
+                        break;
                     }
-                    else if (parse_int(cmdArg, val, p.min_val, p.max_val))
-                        p.var->store(val);
-                    break;
                 }
             }
 	    close(new_socket);
