@@ -291,9 +291,19 @@ void canbus_listener(bool debugprint,std::string node)
                         frame.data[0]=0x04;frame.data[3]=(mv>>8);frame.data[4]=mv&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
                         break;
                     }
-                    case 0x40: // Supported PIDs 41-60
+                    case 0x00: // Supported PIDs 01-20: 04,05,0B,0C,0D,10 + 0x20
                     {
-                        frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFE;frame.data[7]=0x00;
+                        frame.data[0]=0x06;frame.data[3]=0x18;frame.data[4]=0x39;frame.data[5]=0x00;frame.data[6]=0x01;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x20: // Supported PIDs 21-40: 2F + 0x40
+                    {
+                        frame.data[0]=0x06;frame.data[3]=0x00;frame.data[4]=0x02;frame.data[5]=0x00;frame.data[6]=0x01;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x40: // Supported PIDs 41-60: 42
+                    {
+                        frame.data[0]=0x06;frame.data[3]=0x40;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
                         break;
                     }
                     default:
