@@ -22,6 +22,8 @@
 #include <sstream>
 #include <algorithm>
 #include <climits>
+#include <fstream>
+#include <map>
 // Global running flag
 std::atomic<bool> running(true);
 
@@ -301,6 +303,34 @@ void canbus_listener(bool debugprint,std::string node)
     std::cout << "CAN bus listener stopped.\n";
 }
 /*****************************************************************************/
+// Read key=value config file, skipping comments and blank lines
+static std::map<std::string, std::string> read_config(const std::string &path)
+{
+    std::map<std::string, std::string> cfg;
+    std::ifstream file(path);
+    if (!file.is_open())
+        return cfg;
+    std::string line;
+    while (std::getline(file, line))
+    {
+        // trim leading whitespace
+        size_t start = line.find_first_not_of(" \t");
+        if (start == std::string::npos || line[start] == '#')
+            continue;
+        size_t eq = line.find('=', start);
+        if (eq == std::string::npos)
+            continue;
+        std::string key = line.substr(start, eq - start);
+        std::string val = line.substr(eq + 1);
+        // trim trailing whitespace from value
+        size_t end = val.find_last_not_of(" \t\r\n");
+        if (end != std::string::npos)
+            val = val.substr(0, end + 1);
+        cfg[key] = val;
+    }
+    return cfg;
+}
+/*****************************************************************************/
 void printHelp(std::string program)
 {
         std::cout << "Usage: "<<program<<" [options]\n"
@@ -309,7 +339,9 @@ void printHelp(std::string program)
                 << "  --debugprint=<flag> Specify the true/false debug print (or --debugprint <flag>)\n"
                 << "  --port=<N>          TCP port for control interface (default: 8080)\n"
                 << "  --bind-all          Bind TCP socket to all interfaces (default: localhost only)\n"
-                << "  --help              Display this help message\n";
+                << "  --help              Display this help message\n"
+                << "\nConfig file: ./car-can-emulator.conf or /etc/car-can-emulator.conf\n"
+                << "Command-line arguments override config file values.\n";
 }
 /*****************************************************************************/
 int main(int argc, char* argv[])
@@ -326,6 +358,25 @@ int main(int argc, char* argv[])
     {
         printHelp(myname);
         return 0;
+    }
+
+    // Load defaults from config file (command-line args override)
+    for (const auto &path : {std::string("./car-can-emulator.conf"),
+                             std::string("/etc/car-can-emulator.conf")})
+    {
+        auto cfg = read_config(path);
+        if (!cfg.empty())
+        {
+            if (cfg.count("CAN_NODE") && node == "Unknown")
+                node = cfg["CAN_NODE"];
+            if (cfg.count("TCP_PORT"))
+                port = std::stoi(cfg["TCP_PORT"]);
+            if (cfg.count("DEBUG_PRINT") && debugprint == "Unknown")
+                debugprint = cfg["DEBUG_PRINT"];
+            if (cfg.count("BIND_ALL") && cfg["BIND_ALL"] == "true")
+                bind_all = true;
+            break; // use first config file found
+        }
     }
 
     // Iterate over command-line arguments
