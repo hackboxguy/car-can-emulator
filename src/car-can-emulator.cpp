@@ -67,12 +67,9 @@ static TelltaleInfo telltale_bits[] = {
     {"seatbelt", 8}, {"abs",      9}, {"traction", 10}, {"tpms",    11},
 };
 /*****************************************************************************/
-// Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
-void handle_signal(int signal) {
-    if (signal == SIGINT) {
-        std::cout << "\nSIGINT received. Shutting down gracefully...\n";
-        running = false;
-    }
+// Signal handler for graceful shutdown (async-signal-safe: only sets atomic flag)
+void handle_signal(int) {
+    running = false;
 }
 /*****************************************************************************/
 // Parse integer from string with range validation, returns true on success
@@ -86,6 +83,18 @@ static bool parse_int(const std::string &s, long &out, long min_val, long max_va
     return true;
 }
 /*****************************************************************************/
+// Safe string-to-int/float with fallback defaults
+static int safe_stoi(const std::string &s, int fallback)
+{
+    try { return std::stoi(s); }
+    catch (...) { std::cerr << "Warning: invalid integer '" << s << "', using " << fallback << "\n"; return fallback; }
+}
+static float safe_stof(const std::string &s, float fallback)
+{
+    try { float v = std::stof(s); return v > 0.0f ? v : fallback; }
+    catch (...) { std::cerr << "Warning: invalid float '" << s << "', using " << fallback << "\n"; return fallback; }
+}
+/*****************************************************************************/
 // Function to listen on a Linux socket
 void socket_listener(bool bind_all, int port)
 {
@@ -94,6 +103,7 @@ void socket_listener(bool bind_all, int port)
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Socket creation failed");
+        running = false;
         return;
     }
     int opt = 1;
@@ -106,12 +116,14 @@ void socket_listener(bool bind_all, int port)
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Socket bind failed");
         close(sockfd);
+        running = false;
         return;
     }
 
     if (listen(sockfd, 3) < 0) {
         perror("Socket listen failed");
         close(sockfd);
+        running = false;
         return;
     }
 
@@ -244,9 +256,10 @@ void canbus_listener(bool debugprint,std::string node)
     struct ifreq ifr;
     struct can_frame frame;
     unsigned char req_field=0x00;
-    if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
+    if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
         perror("CAN socket creation failed");
+        running = false;
         return;
     }
 
@@ -256,16 +269,18 @@ void canbus_listener(bool debugprint,std::string node)
     {
         perror("CAN interface not found");
         close(sockfd);
+        running = false;
         return;
     }
 
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
 
-    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) 
+    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
     {
         perror("CAN socket bind failed");
         close(sockfd);
+        running = false;
         return;
     }
 
@@ -305,8 +320,11 @@ void canbus_listener(bool debugprint,std::string node)
                     printf("%02X ",frame.data[i]);
                 printf("\n");
             }
-            if(frame.can_id == 0x7DF )
+            if(frame.can_id == 0x7DF || frame.can_id == 0x7E0)
             {
+                // Only respond to Mode 01 (current data) requests
+                if (frame.data[1] != 0x01)
+                    continue;
                 req_field=frame.data[2];
                 frame.can_id=0x7E8;
                 frame.can_dlc=8;
@@ -315,6 +333,7 @@ void canbus_listener(bool debugprint,std::string node)
                 frame.data[2]=req_field;
                 // SAE J1979 standard OBD2 encoding
                 // TCP interface accepts human-readable values, encoding is done here
+                bool respond = true;
                 switch(req_field)
                 {
                     case 0x04: // Engine load: 1 byte, percentage = value * 100 / 255
@@ -379,12 +398,11 @@ void canbus_listener(bool debugprint,std::string node)
                         break;
                     }
                     default:
-                    {
-                        frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFF;frame.data[7]=0xFF;
+                        // Unsupported PID: do not respond (per OBD2 standard)
+                        respond = false;
                         break;
-                    }
                 }
-                if (write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) 
+                if (respond && write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame))
                     perror("Write");
                 //print response 
                 if(debugprint)
@@ -411,6 +429,7 @@ void telltale_broadcaster(std::string node)
     if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
         perror("Telltale CAN socket creation failed");
+        running = false;
         return;
     }
 
@@ -420,6 +439,7 @@ void telltale_broadcaster(std::string node)
     {
         perror("Telltale CAN interface not found");
         close(sockfd);
+        running = false;
         return;
     }
 
@@ -430,6 +450,7 @@ void telltale_broadcaster(std::string node)
     {
         perror("Telltale CAN socket bind failed");
         close(sockfd);
+        running = false;
         return;
     }
 
@@ -604,8 +625,8 @@ int main(int argc, char* argv[])
     float sim_speed=1.0f;
     int port=8080;
 
-    // If no arguments or --help is passed, print the help message
-    if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--help"))
+    // If --help is passed, print the help message
+    if (argc == 2 && std::string(argv[1]) == "--help")
     {
         printHelp(myname);
         return 0;
@@ -621,7 +642,7 @@ int main(int argc, char* argv[])
             if (cfg.count("CAN_NODE") && node == "Unknown")
                 node = cfg["CAN_NODE"];
             if (cfg.count("TCP_PORT"))
-                port = std::stoi(cfg["TCP_PORT"]);
+                port = safe_stoi(cfg["TCP_PORT"], 8080);
             if (cfg.count("DEBUG_PRINT") && debugprint == "Unknown")
                 debugprint = cfg["DEBUG_PRINT"];
             if (cfg.count("BIND_ALL") && cfg["BIND_ALL"] == "true")
@@ -629,7 +650,7 @@ int main(int argc, char* argv[])
             if (cfg.count("SIMULATE") && cfg["SIMULATE"] == "true")
                 simulate = true;
             if (cfg.count("SIMULATE_SPEED"))
-                sim_speed = std::stof(cfg["SIMULATE_SPEED"]);
+                sim_speed = safe_stof(cfg["SIMULATE_SPEED"], 1.0f);
             break; // use first config file found
         }
     }
@@ -657,11 +678,11 @@ int main(int argc, char* argv[])
 
         // Check for --port= format
         else if (arg.rfind("--port=", 0) == 0)
-            port = std::stoi(arg.substr(7));
+            port = safe_stoi(arg.substr(7), 8080);
 
         // Check for --port followed by value
         else if (arg == "--port" && i + 1 < argc)
-            port = std::stoi(argv[++i]);
+            port = safe_stoi(argv[++i], 8080);
 
         // Check for --simulate flag
         else if (arg == "--simulate")
@@ -669,7 +690,7 @@ int main(int argc, char* argv[])
 
         // Check for --simulate-speed= format
         else if (arg.rfind("--simulate-speed=", 0) == 0)
-            sim_speed = std::stof(arg.substr(17));
+            sim_speed = safe_stof(arg.substr(17), 1.0f);
 
         // Check for --bind-all flag
         else if (arg == "--bind-all")
@@ -688,8 +709,9 @@ int main(int argc, char* argv[])
     if(debugprint=="true")
         debugflag=true;
 
-    // Set up the signal handler
+    // Set up signal handlers (SIGINT for interactive, SIGTERM for service managers)
     std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
 
     // Create threads
     std::thread socket_thread(socket_listener, bind_all, port);
