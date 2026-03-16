@@ -20,10 +20,7 @@
 #include <net/if.h>
 #include <string>
 #include <sstream>
-#include <fstream>
 #include <algorithm>
-
-using namespace std;
 // Global running flag
 std::atomic<bool> running(true);
 
@@ -102,15 +99,15 @@ void socket_listener()
             //std::cout << "Received: " << buffer << "\n";
             std::string cmd,cmdArg;
             std::string buf (buffer);
-            stringstream msgstream(buf);
+            std::stringstream msgstream(buf);
             msgstream >> cmd;
             msgstream >> cmdArg;
-            transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
+            std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
             //speed/rpm/temp/flow
             if(cmd == "speed")
             {
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_speed);
                     write(new_socket,buffer,strlen(buffer));
@@ -120,7 +117,7 @@ void socket_listener()
             }
             else if(cmd == "rpm")
             {    
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_rpm);
                     write(new_socket,buffer,strlen(buffer));
@@ -130,7 +127,7 @@ void socket_listener()
             }
             else if(cmd == "temp")
             {
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_temp);
                     write(new_socket,buffer,strlen(buffer));
@@ -140,7 +137,7 @@ void socket_listener()
             }
             else if(cmd == "flow")
             {
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_flow);
                     write(new_socket,buffer,strlen(buffer));
@@ -150,7 +147,7 @@ void socket_listener()
             }
             else if(cmd == "intake")
             {
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_intake);
                     write(new_socket,buffer,strlen(buffer));
@@ -160,7 +157,7 @@ void socket_listener()
             }
             else if(cmd == "load")
             {
-                if(cmdArg.length()<=0)
+                if(cmdArg.empty())
                 {
                     sprintf(buffer,"%d\n",obd_load);
                     write(new_socket,buffer,strlen(buffer));
@@ -189,8 +186,7 @@ void canbus_listener(bool debugprint,std::string node)
         return;
     }
 
-    //strcpy(ifr.ifr_name, "can0");//TODO: make canbus configurable via cmdline arg
-    strcpy(ifr.ifr_name, node.c_str());//TODO: make canbus configurable via cmdline arg
+    strcpy(ifr.ifr_name, node.c_str());
     ioctl(sockfd, SIOCGIFINDEX, &ifr);
 
     addr.can_family = AF_CAN;
@@ -203,7 +199,7 @@ void canbus_listener(bool debugprint,std::string node)
         return;
     }
 
-    std::cout << "CAN bus listener started on interface:"<<node<<endl;
+    std::cout << "CAN bus listener started on interface:"<<node<<std::endl;
 
     while (running) 
     {
@@ -285,7 +281,7 @@ void printHelp(std::string program)
 /*****************************************************************************/
 int main(int argc, char* argv[])
 {
-    std::string myname = "car-simulator";
+    std::string myname = argv[0];
     std::string node = "Unknown";
     std::string debugprint = "Unknown";
     bool debugflag=false;
