@@ -45,6 +45,9 @@ void socket_listener()
         perror("Socket creation failed");
         return;
     }
+    int opt = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(8080);
@@ -92,11 +95,13 @@ void socket_listener()
                 break;
             }
 
-            //std::cout << "Accepted connection on socket.\n";
-            // Handle the client connection (simplified for demonstration)
             char buffer[1024] = {0};
-            read(new_socket, buffer, 1024);
-            //std::cout << "Received: " << buffer << "\n";
+            ssize_t nbytes = read(new_socket, buffer, sizeof(buffer) - 1);
+            if (nbytes <= 0)
+            {
+                close(new_socket);
+                continue;
+            }
             std::string cmd,cmdArg;
             std::string buf (buffer);
             std::stringstream msgstream(buf);
@@ -186,8 +191,14 @@ void canbus_listener(bool debugprint,std::string node)
         return;
     }
 
-    strcpy(ifr.ifr_name, node.c_str());
-    ioctl(sockfd, SIOCGIFINDEX, &ifr);
+    strncpy(ifr.ifr_name, node.c_str(), IFNAMSIZ - 1);
+    ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+    if (ioctl(sockfd, SIOCGIFINDEX, &ifr) < 0)
+    {
+        perror("CAN interface not found");
+        close(sockfd);
+        return;
+    }
 
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
