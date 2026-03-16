@@ -14,9 +14,7 @@ install(FILES config/car-can-emulator.conf DESTINATION ${CMAKE_INSTALL_SYSCONFDI
 
 if(PLATFORM STREQUAL "systemd")
     install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_SBINDIR})
-    if(EXISTS ${CMAKE_SOURCE_DIR}/deploy/systemd/car-can-emulator.service)
-        install(FILES deploy/systemd/car-can-emulator.service DESTINATION lib/systemd/system)
-    endif()
+    install(FILES deploy/systemd/car-can-emulator.service DESTINATION lib/systemd/system)
 elseif(PLATFORM STREQUAL "openwrt")
     install(TARGETS ${PROJECT_NAME} DESTINATION usr/sbin)
     install(PROGRAMS deploy/openwrt/car-can-emulator.init DESTINATION etc/init.d)

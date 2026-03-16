@@ -1,24 +1,46 @@
 #!/bin/sh /etc/rc.common
-# "new(er)" style init script
-# Look at /lib/functions/service.sh on a running system for explanations of what other SERVICE_
-# options you can use, and when you might want them.
+# procd-style init script for car-can-emulator
 
 START=91
 APP=/usr/sbin/car-can-emulator
+CONF=/etc/car-can-emulator.conf
 SERVICE_WRITE_PID=1
 SERVICE_DAEMONIZE=1
 
-start() {
-	ip link set up can0 type can bitrate 500000
-	ifconfig can0 up
-	ifconfig can0
-	#start server only if can0 node exists	
-	if [ $? = 0 ]; then
-        	service_start $APP --node=can0
+# Read a key from the config file, with a default fallback
+read_conf() {
+	local key="$1" default="$2"
+	if [ -f "$CONF" ]; then
+		val=$(grep "^${key}=" "$CONF" 2>/dev/null | head -1 | cut -d'=' -f2-)
+		# trim whitespace
+		val=$(echo "$val" | tr -d ' \t')
 	fi
+	echo "${val:-$default}"
+}
+
+start() {
+	local can_node=$(read_conf CAN_NODE can0)
+	local can_bitrate=$(read_conf CAN_BITRATE 500000)
+	local tcp_port=$(read_conf TCP_PORT 8080)
+	local simulate=$(read_conf SIMULATE false)
+	local sim_speed=$(read_conf SIMULATE_SPEED 1.0)
+
+	ip link set "$can_node" type can bitrate "$can_bitrate" 2>/dev/null
+	ip link set up "$can_node"
+
+	if [ $? -ne 0 ]; then
+		echo "Error: CAN interface $can_node not available" >&2
+		return 1
+	fi
+
+	local args="--node=$can_node --port=$tcp_port"
+	[ "$simulate" = "true" ] && args="$args --simulate --simulate-speed=$sim_speed"
+
+	service_start $APP $args
 }
 
 stop() {
-	ifconfig can0 down
-        service_stop $APP
+	local can_node=$(read_conf CAN_NODE can0)
+	service_stop $APP
+	ip link set down "$can_node" 2>/dev/null
 }

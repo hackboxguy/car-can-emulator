@@ -1,0 +1,16 @@
+[Unit]
+Description=CAN Bus OBD2 Emulator
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/car-can-emulator
+ExecStartPre=-/sbin/ip link set ${CAN_NODE:-can0} type can bitrate ${CAN_BITRATE:-500000}
+ExecStartPre=-/sbin/ip link set up ${CAN_NODE:-can0}
+ExecStart=/usr/sbin/car-can-emulator
+ExecStopPost=-/sbin/ip link set down ${CAN_NODE:-can0}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
