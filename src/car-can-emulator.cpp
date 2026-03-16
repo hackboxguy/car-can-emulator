@@ -29,6 +29,7 @@ std::atomic<bool> running(true);
 
 std::atomic<int> obd_speed{88}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540};
 std::atomic<int> obd_intake{0}, obd_load{0};
+std::atomic<int> obd_fuel{75}, obd_battery{12600}; // fuel=75%, battery=12600mV (12.6V)
 
 struct OBDParam {
     const char *name;
@@ -44,6 +45,8 @@ static OBDParam obd_params[] = {
     {"flow",   &obd_flow,    0, 65535},
     {"intake", &obd_intake,  0,   255},
     {"load",   &obd_load,    0,   100},
+    {"fuel",   &obd_fuel,    0,   100},
+    {"battery",&obd_battery,  0, 65535},
 };
 /*****************************************************************************/
 // Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
@@ -274,6 +277,18 @@ void canbus_listener(bool debugprint,std::string node)
                     {
                         unsigned short flow = obd_flow.load();
                         frame.data[0]=0x04;frame.data[3]=(flow>>8);frame.data[4]=flow&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x2F: // Fuel tank level: 1 byte, percentage = value * 100 / 255
+                    {
+                        unsigned char enc = (unsigned char)(obd_fuel.load() * 255 / 100);
+                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x42: // Control module voltage: 2 bytes BE, value = millivolts
+                    {
+                        unsigned short mv = obd_battery.load();
+                        frame.data[0]=0x04;frame.data[3]=(mv>>8);frame.data[4]=mv&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
                         break;
                     }
                     case 0x40: // Supported PIDs 41-60
