@@ -10,6 +10,15 @@ set(PLATFORM "local" CACHE STRING "Target platform: systemd, openwrt, or local")
 add_executable(${PROJECT_NAME} src/car-can-emulator.cpp)
 target_link_libraries(${PROJECT_NAME} pthread)
 
+# Tests (no external dependencies, host-only)
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING)
+    enable_testing()
+    add_executable(test-car-can-emulator tests/test-car-can-emulator.cpp)
+    set_target_properties(test-car-can-emulator PROPERTIES CXX_STANDARD 17)
+    add_test(NAME unit-tests COMMAND test-car-can-emulator)
+endif()
+
 install(FILES config/car-can-emulator.conf DESTINATION ${CMAKE_INSTALL_SYSCONFDIR})
 
 if(PLATFORM STREQUAL "systemd")

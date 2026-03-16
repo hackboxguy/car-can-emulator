@@ -25,6 +25,8 @@
 #include <fstream>
 #include <map>
 #include <chrono>
+#include "config-utils.h"
+#include "obd-encode.h"
 // Global running flag and error tracking
 std::atomic<bool> running(true);
 std::atomic<bool> exit_failure(false); // set by threads on fatal errors
@@ -71,48 +73,6 @@ static TelltaleInfo telltale_bits[] = {
 // Signal handler for graceful shutdown (async-signal-safe: only sets atomic flag)
 void handle_signal(int) {
     running = false;
-}
-/*****************************************************************************/
-// Parse integer from string with range validation, returns true on success
-static bool parse_int(const std::string &s, long &out, long min_val, long max_val)
-{
-    char *end = nullptr;
-    long val = strtol(s.c_str(), &end, 10);
-    if (end == s.c_str() || *end != '\0' || val < min_val || val > max_val)
-        return false;
-    out = val;
-    return true;
-}
-/*****************************************************************************/
-// Safe string-to-int with full-string validation and range check
-static int safe_stoi(const std::string &s, int fallback, int min_val = INT_MIN, int max_val = INT_MAX)
-{
-    char *end = nullptr;
-    long val = strtol(s.c_str(), &end, 10);
-    if (end == s.c_str() || *end != '\0') {
-        std::cerr << "Warning: invalid integer '" << s << "', using " << fallback << "\n";
-        return fallback;
-    }
-    if (val < min_val || val > max_val) {
-        std::cerr << "Warning: value " << val << " out of range [" << min_val << "," << max_val << "], using " << fallback << "\n";
-        return fallback;
-    }
-    return (int)val;
-}
-// Safe string-to-float with full-string validation
-static float safe_stof(const std::string &s, float fallback)
-{
-    char *end = nullptr;
-    float val = strtof(s.c_str(), &end);
-    if (end == s.c_str() || *end != '\0') {
-        std::cerr << "Warning: invalid float '" << s << "', using " << fallback << "\n";
-        return fallback;
-    }
-    if (val < 0.01f || val > 100.0f) {
-        std::cerr << "Warning: float " << val << " out of range [0.01,100], using " << fallback << "\n";
-        return fallback;
-    }
-    return val;
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
@@ -364,83 +324,27 @@ void canbus_listener(bool debugprint,std::string node)
                 if (frame.data[1] != 0x01)
                     continue;
                 req_field=frame.data[2];
-                frame.can_id=0x7E8;
-                frame.can_dlc=8;
-                frame.data[0]=0x06;
-                frame.data[1]=0x41;
-                frame.data[2]=req_field;
-                // SAE J1979 standard OBD2 encoding
-                // TCP interface accepts human-readable values, encoding is done here
-                bool respond = true;
+
+                // Look up the current value for this PID
+                int obd_value = 0;
                 switch(req_field)
                 {
-                    case 0x04: // Engine load: 1 byte, percentage = value * 100 / 255
-                    {
-                        unsigned char enc = (unsigned char)(obd_load.load() * 255 / 100);
-                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x05: // Coolant temp: 1 byte, value = temp_c + 40
-                    {
-                        unsigned char enc = (unsigned char)(obd_temp.load() + 40);
-                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x0B: // Intake pressure: 1 byte, direct kPa
-                    {
-                        frame.data[0]=0x03;frame.data[3]=obd_intake.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x0C: // Engine RPM: 2 bytes BE, value = rpm * 4
-                    {
-                        unsigned short enc = obd_rpm.load() * 4;
-                        frame.data[0]=0x04;frame.data[3]=(enc>>8);frame.data[4]=enc&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x0D: // Vehicle speed: 1 byte, direct km/h
-                    {
-                        frame.data[0]=0x03;frame.data[3]=(unsigned char)obd_speed.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x10: // MAF air flow: 2 bytes BE, value = grams_per_sec * 100
-                    {
-                        unsigned short flow = obd_flow.load();
-                        frame.data[0]=0x04;frame.data[3]=(flow>>8);frame.data[4]=flow&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x2F: // Fuel tank level: 1 byte, percentage = value * 100 / 255
-                    {
-                        unsigned char enc = (unsigned char)(obd_fuel.load() * 255 / 100);
-                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x42: // Control module voltage: 2 bytes BE, value = millivolts
-                    {
-                        unsigned short mv = obd_battery.load();
-                        frame.data[0]=0x04;frame.data[3]=(mv>>8);frame.data[4]=mv&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x00: // Supported PIDs 01-20: 04,05,0B,0C,0D,10 + 0x20
-                    {
-                        frame.data[0]=0x06;frame.data[3]=0x18;frame.data[4]=0x39;frame.data[5]=0x00;frame.data[6]=0x01;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x20: // Supported PIDs 21-40: 2F + 0x40
-                    {
-                        frame.data[0]=0x06;frame.data[3]=0x00;frame.data[4]=0x02;frame.data[5]=0x00;frame.data[6]=0x01;frame.data[7]=0x00;
-                        break;
-                    }
-                    case 0x40: // Supported PIDs 41-60: 42
-                    {
-                        frame.data[0]=0x06;frame.data[3]=0x40;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
-                        break;
-                    }
-                    default:
-                        // Unsupported PID: do not respond (per OBD2 standard)
-                        respond = false;
-                        break;
+                    case 0x04: obd_value = obd_load.load(); break;
+                    case 0x05: obd_value = obd_temp.load(); break;
+                    case 0x0B: obd_value = obd_intake.load(); break;
+                    case 0x0C: obd_value = obd_rpm.load(); break;
+                    case 0x0D: obd_value = obd_speed.load(); break;
+                    case 0x10: obd_value = obd_flow.load(); break;
+                    case 0x2F: obd_value = obd_fuel.load(); break;
+                    case 0x42: obd_value = obd_battery.load(); break;
+                    default: break; // supported PID queries don't need a value
                 }
-                if (respond && write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame))
+
+                OBDResponse resp = encode_obd_response(req_field, obd_value);
+                frame.can_id = 0x7E8;
+                frame.can_dlc = 8;
+                std::memcpy(frame.data, resp.data, 8);
+                if (resp.respond && write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame))
                     perror("Write");
                 //print response 
                 if(debugprint)
@@ -606,41 +510,6 @@ void drive_simulator(float speed_mult)
     }
 
     std::cout << "Drive simulator stopped.\n";
-}
-/*****************************************************************************/
-// Read key=value config file, skipping comments and blank lines
-static std::map<std::string, std::string> read_config(const std::string &path)
-{
-    std::map<std::string, std::string> cfg;
-    std::ifstream file(path);
-    if (!file.is_open())
-        return cfg;
-    std::string line;
-    while (std::getline(file, line))
-    {
-        // trim leading whitespace
-        size_t start = line.find_first_not_of(" \t");
-        if (start == std::string::npos || line[start] == '#')
-            continue;
-        size_t eq = line.find('=', start);
-        if (eq == std::string::npos)
-            continue;
-        std::string key = line.substr(start, eq - start);
-        // trim trailing whitespace from key
-        size_t kend = key.find_last_not_of(" \t");
-        if (kend != std::string::npos)
-            key = key.substr(0, kend + 1);
-        std::string val = line.substr(eq + 1);
-        // trim leading and trailing whitespace from value
-        size_t vstart = val.find_first_not_of(" \t");
-        size_t vend = val.find_last_not_of(" \t\r\n");
-        if (vstart != std::string::npos && vend != std::string::npos)
-            val = val.substr(vstart, vend - vstart + 1);
-        else
-            val.clear();
-        cfg[key] = val;
-    }
-    return cfg;
 }
 /*****************************************************************************/
 void printHelp(std::string program)
