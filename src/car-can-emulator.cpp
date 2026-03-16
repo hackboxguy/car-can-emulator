@@ -267,16 +267,54 @@ void canbus_listener(bool debugprint,std::string node)
                 frame.data[0]=0x06;
                 frame.data[1]=0x41;
                 frame.data[2]=req_field;
+                // SAE J1979 standard OBD2 encoding
+                // TCP interface accepts human-readable values, encoding is done here
                 switch(req_field)
                 {
-                    case 0x04:frame.data[0]=0x03;frame.data[3]=obd_load.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//load
-                    case 0x0B:frame.data[0]=0x03;frame.data[3]=obd_intake.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//intake
-                    case 0x10:frame.data[0]=0x04;frame.data[3]=(obd_flow.load()>>8);frame.data[4]=obd_flow.load()&0x00FF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//air-flow rate
-                    case 0x05:frame.data[0]=0x03;frame.data[3]=obd_temp.load()&0x00FF;frame.data[4]=(obd_temp.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine coolant temp
-                    case 0x0D:frame.data[0]=0x03;frame.data[3]=obd_speed.load()&0x00FF;frame.data[4]=(obd_speed.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//vehicle speed
-                    case 0x0C:frame.data[0]=0x04;frame.data[3]=obd_rpm.load()&0x00FF;frame.data[4]=(obd_rpm.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine rpm
-                    case 0x40:frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFE;frame.data[7]=0x00;break;//supported pid's
-                    default  :frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFF;frame.data[7]=0xFF;break;
+                    case 0x04: // Engine load: 1 byte, percentage = value * 100 / 255
+                    {
+                        unsigned char enc = (unsigned char)(obd_load.load() * 255 / 100);
+                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x05: // Coolant temp: 1 byte, value = temp_c + 40
+                    {
+                        unsigned char enc = (unsigned char)(obd_temp.load() + 40);
+                        frame.data[0]=0x03;frame.data[3]=enc;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x0B: // Intake pressure: 1 byte, direct kPa
+                    {
+                        frame.data[0]=0x03;frame.data[3]=obd_intake.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x0C: // Engine RPM: 2 bytes BE, value = rpm * 4
+                    {
+                        unsigned short enc = obd_rpm.load() * 4;
+                        frame.data[0]=0x04;frame.data[3]=(enc>>8);frame.data[4]=enc&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x0D: // Vehicle speed: 1 byte, direct km/h
+                    {
+                        frame.data[0]=0x03;frame.data[3]=(unsigned char)obd_speed.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x10: // MAF air flow: 2 bytes BE, value = grams_per_sec * 100
+                    {
+                        unsigned short flow = obd_flow.load();
+                        frame.data[0]=0x04;frame.data[3]=(flow>>8);frame.data[4]=flow&0xFF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;
+                        break;
+                    }
+                    case 0x40: // Supported PIDs 41-60
+                    {
+                        frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFE;frame.data[7]=0x00;
+                        break;
+                    }
+                    default:
+                    {
+                        frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFF;frame.data[7]=0xFF;
+                        break;
+                    }
                 }
                 if (write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) 
                     perror("Write");
