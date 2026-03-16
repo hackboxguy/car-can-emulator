@@ -27,6 +27,7 @@
 #include <chrono>
 // Global running flag
 std::atomic<bool> running(true);
+std::atomic<bool> sim_paused(false);
 
 std::atomic<int> obd_speed{88}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540};
 std::atomic<int> obd_intake{0}, obd_load{0};
@@ -160,7 +161,15 @@ void socket_listener(bool bind_all, int port)
             std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
             long val = 0;
-            if (cmd == "telltale")
+            if (cmd == "pause")
+            {
+                sim_paused.store(true);
+            }
+            else if (cmd == "resume")
+            {
+                sim_paused.store(false);
+            }
+            else if (cmd == "telltale")
             {
                 if (cmdArg.empty())
                 {
@@ -459,6 +468,88 @@ void telltale_broadcaster(std::string node)
     std::cout << "Telltale broadcaster stopped.\n";
 }
 /*****************************************************************************/
+// Drive simulation: cycles through a realistic drive profile
+struct SimPhase {
+    const char *name;
+    int duration_ms;    // phase duration
+    int speed_start, speed_end;
+    int rpm_start, rpm_end;
+    int temp_start, temp_end;
+    int fuel_start, fuel_end;
+    unsigned short telltale_on;   // telltales to set at phase start
+    unsigned short telltale_off;  // telltales to clear at phase start
+};
+
+static SimPhase drive_profile[] = {
+    {"cold start",   3000,   0,  0,  800, 800,  20, 40, 75,75, 0x0100,0x0000}, // seatbelt on
+    {"warmup idle",  5000,   0,  0,  800, 800,  40, 70, 75,75, 0x0000,0x0100}, // seatbelt off
+    {"accel 1-2",    3000,   0, 30,  800,3500,  70, 75, 75,74, 0x0010,0x0000}, // left turn on
+    {"accel 2-3",    3000,  30, 60, 2000,3500,  75, 80, 74,73, 0x0000,0x0010}, // left turn off
+    {"accel 3-4",    4000,  60,100, 2000,3500,  80, 85, 73,71, 0x0000,0x0000},
+    {"cruise",      15000, 100,100, 2200,2200,  85, 90, 71,68, 0x0040,0x0000}, // highbeam on
+    {"accel 4-5",    4000, 100,140, 2200,4000,  90, 90, 68,65, 0x0000,0x0040}, // highbeam off
+    {"high cruise", 10000, 140,140, 3000,3000,  90, 90, 65,60, 0x0000,0x0000},
+    {"decelerate",   5000, 140, 60, 3000,1500,  90, 88, 60,60, 0x0008,0x0000}, // brake on
+    {"coast",        4000,  60, 30, 1500,1000,  88, 86, 60,60, 0x0020,0x0000}, // right turn on
+    {"stop",         4000,  30,  0, 1000, 800,  86, 85, 60,60, 0x0000,0x0020}, // right turn off
+    {"idle at stop", 5000,   0,  0,  800, 800,  85, 83, 60,60, 0x0000,0x0008}, // brake off
+};
+
+void drive_simulator(float speed_mult)
+{
+    std::cout << "Drive simulator started (speed=" << speed_mult << "x).\n";
+
+    const int UPDATE_MS = 50;
+    const int NUM_PHASES = sizeof(drive_profile) / sizeof(drive_profile[0]);
+
+    while (running)
+    {
+        for (int phase = 0; phase < NUM_PHASES && running; phase++)
+        {
+            auto &p = drive_profile[phase];
+            int duration = (int)(p.duration_ms / speed_mult);
+            int steps = duration / UPDATE_MS;
+            if (steps < 1) steps = 1;
+
+            // Apply telltale changes at phase start
+            if (p.telltale_on)
+                telltale_state.fetch_or(p.telltale_on);
+            if (p.telltale_off)
+                telltale_state.fetch_and(~p.telltale_off);
+
+            for (int step = 0; step < steps && running; step++)
+            {
+                if (sim_paused.load())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(UPDATE_MS));
+                    step--; // don't advance while paused
+                    continue;
+                }
+
+                float t = (float)step / steps;
+                int spd = p.speed_start + (int)((p.speed_end - p.speed_start) * t);
+                int rpm = p.rpm_start + (int)((p.rpm_end - p.rpm_start) * t);
+                // Add slight RPM jitter for realism
+                rpm += (step % 5 - 2) * 10; // ±20 RPM jitter
+                if (rpm < 0) rpm = 0;
+                int tmp = p.temp_start + (int)((p.temp_end - p.temp_start) * t);
+                int fuel = p.fuel_start + (int)((p.fuel_end - p.fuel_start) * t);
+
+                obd_speed.store(spd);
+                obd_rpm.store(rpm);
+                obd_temp.store(tmp);
+                obd_fuel.store(fuel);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(UPDATE_MS));
+            }
+        }
+        // Reset fuel for next loop, temp carries over
+        obd_fuel.store(75);
+    }
+
+    std::cout << "Drive simulator stopped.\n";
+}
+/*****************************************************************************/
 // Read key=value config file, skipping comments and blank lines
 static std::map<std::string, std::string> read_config(const std::string &path)
 {
@@ -495,6 +586,8 @@ void printHelp(std::string program)
                 << "  --debugprint=<flag> Specify the true/false debug print (or --debugprint <flag>)\n"
                 << "  --port=<N>          TCP port for control interface (default: 8080)\n"
                 << "  --bind-all          Bind TCP socket to all interfaces (default: localhost only)\n"
+                << "  --simulate          Enable drive simulation mode\n"
+                << "  --simulate-speed=<N> Simulation speed multiplier (default: 1.0)\n"
                 << "  --help              Display this help message\n"
                 << "\nConfig file: ./car-can-emulator.conf or /etc/car-can-emulator.conf\n"
                 << "Command-line arguments override config file values.\n";
@@ -507,6 +600,8 @@ int main(int argc, char* argv[])
     std::string debugprint = "Unknown";
     bool debugflag=false;
     bool bind_all=false;
+    bool simulate=false;
+    float sim_speed=1.0f;
     int port=8080;
 
     // If no arguments or --help is passed, print the help message
@@ -531,6 +626,10 @@ int main(int argc, char* argv[])
                 debugprint = cfg["DEBUG_PRINT"];
             if (cfg.count("BIND_ALL") && cfg["BIND_ALL"] == "true")
                 bind_all = true;
+            if (cfg.count("SIMULATE") && cfg["SIMULATE"] == "true")
+                simulate = true;
+            if (cfg.count("SIMULATE_SPEED"))
+                sim_speed = std::stof(cfg["SIMULATE_SPEED"]);
             break; // use first config file found
         }
     }
@@ -564,6 +663,14 @@ int main(int argc, char* argv[])
         else if (arg == "--port" && i + 1 < argc)
             port = std::stoi(argv[++i]);
 
+        // Check for --simulate flag
+        else if (arg == "--simulate")
+            simulate = true;
+
+        // Check for --simulate-speed= format
+        else if (arg.rfind("--simulate-speed=", 0) == 0)
+            sim_speed = std::stof(arg.substr(17));
+
         // Check for --bind-all flag
         else if (arg == "--bind-all")
             bind_all = true;
@@ -588,11 +695,16 @@ int main(int argc, char* argv[])
     std::thread socket_thread(socket_listener, bind_all, port);
     std::thread canbus_thread(canbus_listener, debugflag, node);
     std::thread telltale_thread(telltale_broadcaster, node);
+    std::thread sim_thread;
+    if (simulate)
+        sim_thread = std::thread(drive_simulator, sim_speed);
 
     // Wait for threads to complete
     socket_thread.join();
     canbus_thread.join();
     telltale_thread.join();
+    if (sim_thread.joinable())
+        sim_thread.join();
 
     std::cout << "All threads have exited. Program terminated.\n";
     return 0;
