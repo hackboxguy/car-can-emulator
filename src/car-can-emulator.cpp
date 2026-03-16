@@ -24,8 +24,8 @@
 // Global running flag
 std::atomic<bool> running(true);
 
-unsigned short obd_speed=0x0058,obd_temp=35,obd_rpm=12,obd_flow=0x0540;//default-flow 5.4l/100km
-unsigned char obd_intake=0,obd_load=0;
+std::atomic<unsigned short> obd_speed{0x0058}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540}; //default-flow 5.4l/100km
+std::atomic<unsigned char> obd_intake{0}, obd_load{0};
 /*****************************************************************************/
 // Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
 void handle_signal(int signal) {
@@ -109,61 +109,61 @@ void socket_listener()
             {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_speed);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_speed.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
                 else
-                    obd_speed=atoi(cmdArg.c_str());	
+                    obd_speed.store(atoi(cmdArg.c_str()));
             }
             else if(cmd == "rpm")
-            {    
+            {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_rpm);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_rpm.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else 
-                    obd_rpm=atoi(cmdArg.c_str());	
+                else
+                    obd_rpm.store(atoi(cmdArg.c_str()));
             }
             else if(cmd == "temp")
             {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_temp);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_temp.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else 
-                    obd_temp=atoi(cmdArg.c_str());	
+                else
+                    obd_temp.store(atoi(cmdArg.c_str()));
             }
             else if(cmd == "flow")
             {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_flow);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_flow.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else 
-                    obd_flow=atoi(cmdArg.c_str());	
+                else
+                    obd_flow.store(atoi(cmdArg.c_str()));
             }
             else if(cmd == "intake")
             {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_intake);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_intake.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
                 else
-                    obd_intake=atoi(cmdArg.c_str());
+                    obd_intake.store(atoi(cmdArg.c_str()));
             }
             else if(cmd == "load")
             {
                 if(cmdArg.empty())
                 {
-                    sprintf(buffer,"%d\n",obd_load);
+                    snprintf(buffer,sizeof(buffer),"%d\n",obd_load.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
                 else
-                    obd_load=atoi(cmdArg.c_str());
+                    obd_load.store(atoi(cmdArg.c_str()));
             }
 	    close(new_socket);
         }
@@ -245,12 +245,12 @@ void canbus_listener(bool debugprint,std::string node)
                 frame.data[2]=req_field;
                 switch(req_field)
                 {
-                    case 0x04:frame.data[0]=0x03;frame.data[3]=obd_load;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//load
-                    case 0x0B:frame.data[0]=0x03;frame.data[3]=obd_intake;frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//intake
-                    case 0x10:frame.data[0]=0x04;frame.data[3]=(obd_flow>>8);frame.data[4]=obd_flow&0x00FF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//air-flow rate
-                    case 0x05:frame.data[0]=0x03;frame.data[3]=obd_temp&0x00FF;frame.data[4]=(obd_temp>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine coolant temp
-                    case 0x0D:frame.data[0]=0x03;frame.data[3]=obd_speed&0x00FF;frame.data[4]=(obd_speed>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//vehicle speed
-                    case 0x0C:frame.data[0]=0x04;frame.data[3]=obd_rpm&0x00FF;frame.data[4]=(obd_rpm>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine rpm
+                    case 0x04:frame.data[0]=0x03;frame.data[3]=obd_load.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//load
+                    case 0x0B:frame.data[0]=0x03;frame.data[3]=obd_intake.load();frame.data[4]=0x00;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//intake
+                    case 0x10:frame.data[0]=0x04;frame.data[3]=(obd_flow.load()>>8);frame.data[4]=obd_flow.load()&0x00FF;frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//air-flow rate
+                    case 0x05:frame.data[0]=0x03;frame.data[3]=obd_temp.load()&0x00FF;frame.data[4]=(obd_temp.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine coolant temp
+                    case 0x0D:frame.data[0]=0x03;frame.data[3]=obd_speed.load()&0x00FF;frame.data[4]=(obd_speed.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//vehicle speed
+                    case 0x0C:frame.data[0]=0x04;frame.data[3]=obd_rpm.load()&0x00FF;frame.data[4]=(obd_rpm.load()>>8);frame.data[5]=0x00;frame.data[6]=0x00;frame.data[7]=0x00;break;//engine rpm
                     case 0x40:frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFE;frame.data[7]=0x00;break;//supported pid's
                     default  :frame.data[0]=0x06;frame.data[3]=0xFF;frame.data[4]=0xFF;frame.data[5]=0xFF;frame.data[6]=0xFF;frame.data[7]=0xFF;break;
                 }
