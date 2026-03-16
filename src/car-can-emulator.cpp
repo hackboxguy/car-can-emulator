@@ -25,8 +25,24 @@
 // Global running flag
 std::atomic<bool> running(true);
 
-std::atomic<unsigned short> obd_speed{0x0058}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540}; //default-flow 5.4l/100km
-std::atomic<unsigned char> obd_intake{0}, obd_load{0};
+std::atomic<int> obd_speed{88}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540};
+std::atomic<int> obd_intake{0}, obd_load{0};
+
+struct OBDParam {
+    const char *name;
+    std::atomic<int> *var;
+    long min_val;
+    long max_val;
+};
+
+static OBDParam obd_params[] = {
+    {"speed",  &obd_speed,   0,   255},
+    {"rpm",    &obd_rpm,     0, 16383},
+    {"temp",   &obd_temp,  -40,   215},
+    {"flow",   &obd_flow,    0, 65535},
+    {"intake", &obd_intake,  0,   255},
+    {"load",   &obd_load,    0,   100},
+};
 /*****************************************************************************/
 // Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
 void handle_signal(int signal) {
@@ -122,66 +138,19 @@ void socket_listener(bool bind_all)
             std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
             long val = 0;
-            //speed/rpm/temp/flow
-            if(cmd == "speed")
+            for (auto &p : obd_params)
             {
-                if(cmdArg.empty())
+                if (cmd == p.name)
                 {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_speed.load());
-                    write(new_socket,buffer,strlen(buffer));
+                    if (cmdArg.empty())
+                    {
+                        snprintf(buffer, sizeof(buffer), "%d\n", p.var->load());
+                        write(new_socket, buffer, strlen(buffer));
+                    }
+                    else if (parse_int(cmdArg, val, p.min_val, p.max_val))
+                        p.var->store(val);
+                    break;
                 }
-                else if(parse_int(cmdArg, val, 0, 255))
-                    obd_speed.store(val);
-            }
-            else if(cmd == "rpm")
-            {
-                if(cmdArg.empty())
-                {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_rpm.load());
-                    write(new_socket,buffer,strlen(buffer));
-                }
-                else if(parse_int(cmdArg, val, 0, 16383))
-                    obd_rpm.store(val);
-            }
-            else if(cmd == "temp")
-            {
-                if(cmdArg.empty())
-                {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_temp.load());
-                    write(new_socket,buffer,strlen(buffer));
-                }
-                else if(parse_int(cmdArg, val, -40, 215))
-                    obd_temp.store(val);
-            }
-            else if(cmd == "flow")
-            {
-                if(cmdArg.empty())
-                {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_flow.load());
-                    write(new_socket,buffer,strlen(buffer));
-                }
-                else if(parse_int(cmdArg, val, 0, 65535))
-                    obd_flow.store(val);
-            }
-            else if(cmd == "intake")
-            {
-                if(cmdArg.empty())
-                {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_intake.load());
-                    write(new_socket,buffer,strlen(buffer));
-                }
-                else if(parse_int(cmdArg, val, 0, 255))
-                    obd_intake.store(val);
-            }
-            else if(cmd == "load")
-            {
-                if(cmdArg.empty())
-                {
-                    snprintf(buffer,sizeof(buffer),"%d\n",obd_load.load());
-                    write(new_socket,buffer,strlen(buffer));
-                }
-                else if(parse_int(cmdArg, val, 0, 100))
-                    obd_load.store(val);
             }
 	    close(new_socket);
         }
