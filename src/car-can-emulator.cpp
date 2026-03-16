@@ -174,10 +174,17 @@ void socket_listener(bool bind_all, int port)
         {
             if ((new_socket = accept(sockfd, (struct sockaddr*)&client_addr, &addr_len)) < 0)
             {
-                if (running) {
-                    perror("Socket accept failed");
-                    exit_failure = true;
+                if (!running)
+                    break; // signal-driven shutdown
+                // Transient errors (e.g. ECONNABORTED): log and retry
+                if (errno == ECONNABORTED || errno == EINTR)
+                {
+                    perror("Socket accept (transient, retrying)");
+                    continue;
                 }
+                // Fatal accept error: shut down
+                perror("Socket accept failed");
+                exit_failure = true;
                 running = false;
                 break;
             }
