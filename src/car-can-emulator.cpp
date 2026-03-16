@@ -36,7 +36,7 @@ void handle_signal(int signal) {
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
-void socket_listener() 
+void socket_listener(bool bind_all)
 {
     int sockfd;
     struct sockaddr_in server_addr;
@@ -49,7 +49,7 @@ void socket_listener()
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_addr.s_addr = bind_all ? INADDR_ANY : htonl(INADDR_LOOPBACK);
     server_addr.sin_port = htons(8080);
 
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
@@ -287,6 +287,7 @@ void printHelp(std::string program)
                 << "Options:\n"
                 << "  --node=<canx>       Specify the can0/can1 node(or --node <canx>)\n"
                 << "  --debugprint=<flag> Specify the true/false debug print (or --debugprint <flag>)\n"
+                << "  --bind-all          Bind TCP socket to all interfaces (default: localhost only)\n"
                 << "  --help              Display this help message\n";
 }
 /*****************************************************************************/
@@ -296,6 +297,7 @@ int main(int argc, char* argv[])
     std::string node = "Unknown";
     std::string debugprint = "Unknown";
     bool debugflag=false;
+    bool bind_all=false;
 
     // If no arguments or --help is passed, print the help message
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--help"))
@@ -324,6 +326,10 @@ int main(int argc, char* argv[])
         // Check for --debugprint followed by value
         else if (arg == "--debugprint" && i + 1 < argc)
             debugprint = argv[++i];  // Get the next argument as the debugprint
+
+        // Check for --bind-all flag
+        else if (arg == "--bind-all")
+            bind_all = true;
     }
 
     for(auto& c : debugprint)
@@ -335,7 +341,7 @@ int main(int argc, char* argv[])
     std::signal(SIGINT, handle_signal);
 
     // Create threads
-    std::thread socket_thread(socket_listener);
+    std::thread socket_thread(socket_listener, bind_all);
     std::thread canbus_thread(canbus_listener,debugflag,node);
 
     // Wait for threads to complete
