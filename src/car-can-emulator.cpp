@@ -83,16 +83,31 @@ static bool parse_int(const std::string &s, long &out, long min_val, long max_va
     return true;
 }
 /*****************************************************************************/
-// Safe string-to-int/float with fallback defaults
-static int safe_stoi(const std::string &s, int fallback)
+// Safe string-to-int with full-string validation and range check
+static int safe_stoi(const std::string &s, int fallback, int min_val = INT_MIN, int max_val = INT_MAX)
 {
-    try { return std::stoi(s); }
-    catch (...) { std::cerr << "Warning: invalid integer '" << s << "', using " << fallback << "\n"; return fallback; }
+    char *end = nullptr;
+    long val = strtol(s.c_str(), &end, 10);
+    if (end == s.c_str() || *end != '\0') {
+        std::cerr << "Warning: invalid integer '" << s << "', using " << fallback << "\n";
+        return fallback;
+    }
+    if (val < min_val || val > max_val) {
+        std::cerr << "Warning: value " << val << " out of range [" << min_val << "," << max_val << "], using " << fallback << "\n";
+        return fallback;
+    }
+    return (int)val;
 }
+// Safe string-to-float with full-string validation
 static float safe_stof(const std::string &s, float fallback)
 {
-    try { float v = std::stof(s); return v > 0.0f ? v : fallback; }
-    catch (...) { std::cerr << "Warning: invalid float '" << s << "', using " << fallback << "\n"; return fallback; }
+    char *end = nullptr;
+    float val = strtof(s.c_str(), &end);
+    if (end == s.c_str() || *end != '\0') {
+        std::cerr << "Warning: invalid float '" << s << "', using " << fallback << "\n";
+        return fallback;
+    }
+    return val > 0.0f ? val : fallback;
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
@@ -143,18 +158,20 @@ void socket_listener(bool bind_all, int port)
         timeout.tv_usec = 0;
 
         int activity = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
-        if (activity < 0 && errno != EINTR) 
+        if (activity < 0 && errno != EINTR)
         {
             perror("Select error");
+            running = false;
             break;
         }
 
-        if (FD_ISSET(sockfd, &read_fds)) 
+        if (FD_ISSET(sockfd, &read_fds))
         {
-            if ((new_socket = accept(sockfd, (struct sockaddr*)&client_addr, &addr_len)) < 0) 
+            if ((new_socket = accept(sockfd, (struct sockaddr*)&client_addr, &addr_len)) < 0)
             {
-                if (running) 
+                if (running)
                     perror("Socket accept failed");
+                running = false;
                 break;
             }
 
@@ -297,19 +314,21 @@ void canbus_listener(bool debugprint,std::string node)
         timeout.tv_usec = 0;
 
         int activity = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
-        if (activity < 0 && errno != EINTR) 
+        if (activity < 0 && errno != EINTR)
         {
             perror("Select error");
+            running = false;
             break;
         }
 
-        if (FD_ISSET(sockfd, &read_fds)) 
+        if (FD_ISSET(sockfd, &read_fds))
         {
             int nbytes = read(sockfd, &frame, sizeof(struct can_frame));
-            if (nbytes < 0) 
+            if (nbytes < 0)
             {
-                if (running) 
+                if (running)
                     perror("CAN read failed");
+                running = false;
                 break;
             }
 
@@ -322,6 +341,9 @@ void canbus_listener(bool debugprint,std::string node)
             }
             if(frame.can_id == 0x7DF || frame.can_id == 0x7E0)
             {
+                // Validate minimum DLC for OBD request (length + mode + PID = 3 bytes)
+                if (frame.can_dlc < 3)
+                    continue;
                 // Only respond to Mode 01 (current data) requests
                 if (frame.data[1] != 0x01)
                     continue;
@@ -466,7 +488,6 @@ void telltale_broadcaster(std::string node)
         // Auto-blink turn signals: toggle bits 4 (left) and 5 (right) at ~1.5Hz
         blink_counter++;
         bool blink_on = (blink_counter / BLINK_TOGGLE_COUNT) % 2 == 0;
-        unsigned short blink_mask = state & 0x0030; // bits 4,5 = turn signals
         unsigned short wire_state;
         if (blink_on)
             wire_state = state; // show turn signals as-is
@@ -610,7 +631,10 @@ void printHelp(std::string program)
                 << "  --simulate          Enable drive simulation mode\n"
                 << "  --simulate-speed=<N> Simulation speed multiplier (default: 1.0)\n"
                 << "  --help              Display this help message\n"
-                << "\nConfig file: ./car-can-emulator.conf or /etc/car-can-emulator.conf\n"
+                << "\nConfig file search order:\n"
+                << "  ./car-can-emulator.conf\n"
+                << "  ./config/car-can-emulator.conf\n"
+                << "  /etc/car-can-emulator.conf\n"
                 << "Command-line arguments override config file values.\n";
 }
 /*****************************************************************************/
@@ -634,6 +658,7 @@ int main(int argc, char* argv[])
 
     // Load defaults from config file (command-line args override)
     for (const auto &path : {std::string("./car-can-emulator.conf"),
+                             std::string("./config/car-can-emulator.conf"),
                              std::string("/etc/car-can-emulator.conf")})
     {
         auto cfg = read_config(path);
@@ -642,7 +667,7 @@ int main(int argc, char* argv[])
             if (cfg.count("CAN_NODE") && node == "Unknown")
                 node = cfg["CAN_NODE"];
             if (cfg.count("TCP_PORT"))
-                port = safe_stoi(cfg["TCP_PORT"], 8080);
+                port = safe_stoi(cfg["TCP_PORT"], 8080, 1, 65535);
             if (cfg.count("DEBUG_PRINT") && debugprint == "Unknown")
                 debugprint = cfg["DEBUG_PRINT"];
             if (cfg.count("BIND_ALL") && cfg["BIND_ALL"] == "true")
@@ -678,11 +703,11 @@ int main(int argc, char* argv[])
 
         // Check for --port= format
         else if (arg.rfind("--port=", 0) == 0)
-            port = safe_stoi(arg.substr(7), 8080);
+            port = safe_stoi(arg.substr(7), 8080, 1, 65535);
 
         // Check for --port followed by value
         else if (arg == "--port" && i + 1 < argc)
-            port = safe_stoi(argv[++i], 8080);
+            port = safe_stoi(argv[++i], 8080, 1, 65535);
 
         // Check for --simulate flag
         else if (arg == "--simulate")
@@ -729,6 +754,6 @@ int main(int argc, char* argv[])
         sim_thread.join();
 
     std::cout << "All threads have exited. Program terminated.\n";
-    return 0;
+    return running.load() ? 0 : 1;
 }
 /*****************************************************************************/
