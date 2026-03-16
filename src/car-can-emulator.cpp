@@ -25,8 +25,9 @@
 #include <fstream>
 #include <map>
 #include <chrono>
-// Global running flag
+// Global running flag and error tracking
 std::atomic<bool> running(true);
+std::atomic<bool> exit_failure(false); // set by threads on fatal errors
 std::atomic<bool> sim_paused(false);
 
 std::atomic<int> obd_speed{88}, obd_temp{35}, obd_rpm{12}, obd_flow{0x0540};
@@ -118,7 +119,7 @@ void socket_listener(bool bind_all, int port)
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Socket creation failed");
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
     int opt = 1;
@@ -131,14 +132,14 @@ void socket_listener(bool bind_all, int port)
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Socket bind failed");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
     if (listen(sockfd, 3) < 0) {
         perror("Socket listen failed");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -161,7 +162,7 @@ void socket_listener(bool bind_all, int port)
         if (activity < 0 && errno != EINTR)
         {
             perror("Select error");
-            running = false;
+            exit_failure = true; running = false;
             break;
         }
 
@@ -171,7 +172,7 @@ void socket_listener(bool bind_all, int port)
             {
                 if (running)
                     perror("Socket accept failed");
-                running = false;
+                exit_failure = true; running = false;
                 break;
             }
 
@@ -276,7 +277,7 @@ void canbus_listener(bool debugprint,std::string node)
     if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
         perror("CAN socket creation failed");
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -286,7 +287,7 @@ void canbus_listener(bool debugprint,std::string node)
     {
         perror("CAN interface not found");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -297,13 +298,13 @@ void canbus_listener(bool debugprint,std::string node)
     {
         perror("CAN socket bind failed");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
     std::cout << "CAN bus listener started on interface:"<<node<<std::endl;
 
-    while (running) 
+    while (running)
     {
         fd_set read_fds;
         FD_ZERO(&read_fds);
@@ -317,7 +318,7 @@ void canbus_listener(bool debugprint,std::string node)
         if (activity < 0 && errno != EINTR)
         {
             perror("Select error");
-            running = false;
+            exit_failure = true; running = false;
             break;
         }
 
@@ -328,7 +329,7 @@ void canbus_listener(bool debugprint,std::string node)
             {
                 if (running)
                     perror("CAN read failed");
-                running = false;
+                exit_failure = true; running = false;
                 break;
             }
 
@@ -451,7 +452,7 @@ void telltale_broadcaster(std::string node)
     if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
         perror("Telltale CAN socket creation failed");
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -461,7 +462,7 @@ void telltale_broadcaster(std::string node)
     {
         perror("Telltale CAN interface not found");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -472,7 +473,7 @@ void telltale_broadcaster(std::string node)
     {
         perror("Telltale CAN socket bind failed");
         close(sockfd);
-        running = false;
+        exit_failure = true; running = false;
         return;
     }
 
@@ -610,11 +611,18 @@ static std::map<std::string, std::string> read_config(const std::string &path)
         if (eq == std::string::npos)
             continue;
         std::string key = line.substr(start, eq - start);
+        // trim trailing whitespace from key
+        size_t kend = key.find_last_not_of(" \t");
+        if (kend != std::string::npos)
+            key = key.substr(0, kend + 1);
         std::string val = line.substr(eq + 1);
-        // trim trailing whitespace from value
-        size_t end = val.find_last_not_of(" \t\r\n");
-        if (end != std::string::npos)
-            val = val.substr(0, end + 1);
+        // trim leading and trailing whitespace from value
+        size_t vstart = val.find_first_not_of(" \t");
+        size_t vend = val.find_last_not_of(" \t\r\n");
+        if (vstart != std::string::npos && vend != std::string::npos)
+            val = val.substr(vstart, vend - vstart + 1);
+        else
+            val.clear();
         cfg[key] = val;
     }
     return cfg;
@@ -754,6 +762,6 @@ int main(int argc, char* argv[])
         sim_thread.join();
 
     std::cout << "All threads have exited. Program terminated.\n";
-    return running.load() ? 0 : 1;
+    return exit_failure.load() ? 1 : 0;
 }
 /*****************************************************************************/
