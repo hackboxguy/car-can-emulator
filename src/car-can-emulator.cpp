@@ -21,6 +21,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <climits>
 // Global running flag
 std::atomic<bool> running(true);
 
@@ -33,6 +34,17 @@ void handle_signal(int signal) {
         std::cout << "\nSIGINT received. Shutting down gracefully...\n";
         running = false;
     }
+}
+/*****************************************************************************/
+// Parse integer from string with range validation, returns true on success
+static bool parse_int(const std::string &s, long &out, long min_val, long max_val)
+{
+    char *end = nullptr;
+    long val = strtol(s.c_str(), &end, 10);
+    if (end == s.c_str() || *end != '\0' || val < min_val || val > max_val)
+        return false;
+    out = val;
+    return true;
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
@@ -109,6 +121,7 @@ void socket_listener(bool bind_all)
             msgstream >> cmdArg;
             std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
+            long val = 0;
             //speed/rpm/temp/flow
             if(cmd == "speed")
             {
@@ -117,8 +130,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_speed.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_speed.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, 0, 255))
+                    obd_speed.store(val);
             }
             else if(cmd == "rpm")
             {
@@ -127,8 +140,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_rpm.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_rpm.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, 0, 16383))
+                    obd_rpm.store(val);
             }
             else if(cmd == "temp")
             {
@@ -137,8 +150,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_temp.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_temp.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, -40, 215))
+                    obd_temp.store(val);
             }
             else if(cmd == "flow")
             {
@@ -147,8 +160,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_flow.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_flow.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, 0, 65535))
+                    obd_flow.store(val);
             }
             else if(cmd == "intake")
             {
@@ -157,8 +170,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_intake.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_intake.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, 0, 255))
+                    obd_intake.store(val);
             }
             else if(cmd == "load")
             {
@@ -167,8 +180,8 @@ void socket_listener(bool bind_all)
                     snprintf(buffer,sizeof(buffer),"%d\n",obd_load.load());
                     write(new_socket,buffer,strlen(buffer));
                 }
-                else
-                    obd_load.store(atoi(cmdArg.c_str()));
+                else if(parse_int(cmdArg, val, 0, 100))
+                    obd_load.store(val);
             }
 	    close(new_socket);
         }
@@ -332,11 +345,18 @@ int main(int argc, char* argv[])
             bind_all = true;
     }
 
+    if (node == "Unknown")
+    {
+        std::cerr << "Error: --node argument is required (e.g. --node=can0)\n";
+        printHelp(myname);
+        return 1;
+    }
+
     for(auto& c : debugprint)
         c = tolower(c);
     if(debugprint=="true")
         debugflag=true;
-    
+
     // Set up the signal handler
     std::signal(SIGINT, handle_signal);
 
