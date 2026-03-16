@@ -108,7 +108,11 @@ static float safe_stof(const std::string &s, float fallback)
         std::cerr << "Warning: invalid float '" << s << "', using " << fallback << "\n";
         return fallback;
     }
-    return val > 0.0f ? val : fallback;
+    if (val < 0.01f || val > 100.0f) {
+        std::cerr << "Warning: float " << val << " out of range [0.01,100], using " << fallback << "\n";
+        return fallback;
+    }
+    return val;
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
@@ -682,10 +686,16 @@ int main(int argc, char* argv[])
                 port = safe_stoi(cfg["TCP_PORT"], 8080, 1, 65535);
             if (cfg.count("DEBUG_PRINT") && debugprint == "Unknown")
                 debugprint = cfg["DEBUG_PRINT"];
-            if (cfg.count("BIND_ALL") && cfg["BIND_ALL"] == "true")
-                bind_all = true;
-            if (cfg.count("SIMULATE") && cfg["SIMULATE"] == "true")
-                simulate = true;
+            if (cfg.count("BIND_ALL")) {
+                std::string v = cfg["BIND_ALL"];
+                std::transform(v.begin(), v.end(), v.begin(), ::tolower);
+                if (v == "true") bind_all = true;
+            }
+            if (cfg.count("SIMULATE")) {
+                std::string v = cfg["SIMULATE"];
+                std::transform(v.begin(), v.end(), v.begin(), ::tolower);
+                if (v == "true") simulate = true;
+            }
             if (cfg.count("SIMULATE_SPEED"))
                 sim_speed = safe_stof(cfg["SIMULATE_SPEED"], 1.0f);
             break; // use first config file found
