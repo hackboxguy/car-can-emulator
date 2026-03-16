@@ -170,9 +170,11 @@ void socket_listener(bool bind_all, int port)
         {
             if ((new_socket = accept(sockfd, (struct sockaddr*)&client_addr, &addr_len)) < 0)
             {
-                if (running)
+                if (running) {
                     perror("Socket accept failed");
-                exit_failure = true; running = false;
+                    exit_failure = true;
+                }
+                running = false;
                 break;
             }
 
@@ -327,9 +329,11 @@ void canbus_listener(bool debugprint,std::string node)
             int nbytes = read(sockfd, &frame, sizeof(struct can_frame));
             if (nbytes < 0)
             {
-                if (running)
+                if (running) {
                     perror("CAN read failed");
-                exit_failure = true; running = false;
+                    exit_failure = true;
+                }
+                running = false;
                 break;
             }
 
