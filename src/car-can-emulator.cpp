@@ -24,6 +24,7 @@
 #include <climits>
 #include <fstream>
 #include <map>
+#include <chrono>
 // Global running flag
 std::atomic<bool> running(true);
 
@@ -47,6 +48,22 @@ static OBDParam obd_params[] = {
     {"load",   &obd_load,    0,   100},
     {"fuel",   &obd_fuel,    0,   100},
     {"battery",&obd_battery,  0, 65535},
+};
+
+// Telltale indicator state: 2-byte bitfield broadcast on CAN ID 0x420
+// Byte 0: engine(0), oil(1), battery(2), brake(3), left(4), right(5), highbeam(6), door(7)
+// Byte 1: seatbelt(0), abs(1), traction(2), tpms(3), bits 4-7 reserved
+std::atomic<unsigned short> telltale_state{0x0000};
+
+struct TelltaleInfo {
+    const char *name;
+    int bit;
+};
+
+static TelltaleInfo telltale_bits[] = {
+    {"engine",   0}, {"oil",      1}, {"battery",  2}, {"brake",    3},
+    {"left",     4}, {"right",    5}, {"highbeam",  6}, {"door",     7},
+    {"seatbelt", 8}, {"abs",      9}, {"traction", 10}, {"tpms",    11},
 };
 /*****************************************************************************/
 // Signal handler to handle SIGINT (Ctrl+C) for graceful shutdown
@@ -143,7 +160,43 @@ void socket_listener(bool bind_all, int port)
             std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
             
             long val = 0;
-            if (cmd == "list")
+            if (cmd == "telltale")
+            {
+                if (cmdArg.empty())
+                {
+                    // Read current telltale state as hex
+                    snprintf(buffer, sizeof(buffer), "0x%04X\n", telltale_state.load());
+                    write(new_socket, buffer, strlen(buffer));
+                }
+                else
+                {
+                    std::string action;
+                    msgstream >> action;
+                    std::transform(cmdArg.begin(), cmdArg.end(), cmdArg.begin(), ::tolower);
+                    std::transform(action.begin(), action.end(), action.begin(), ::tolower);
+
+                    if (cmdArg == "all" && action == "off")
+                    {
+                        telltale_state.store(0);
+                    }
+                    else
+                    {
+                        for (auto &t : telltale_bits)
+                        {
+                            if (cmdArg == t.name)
+                            {
+                                unsigned short mask = 1u << t.bit;
+                                if (action == "on")
+                                    telltale_state.fetch_or(mask);
+                                else if (action == "off")
+                                    telltale_state.fetch_and(~mask);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (cmd == "list")
             {
                 std::string response;
                 for (auto &p : obd_params)
@@ -338,6 +391,74 @@ void canbus_listener(bool debugprint,std::string node)
     std::cout << "CAN bus listener stopped.\n";
 }
 /*****************************************************************************/
+// Telltale broadcaster: sends CAN ID 0x420 every 200ms
+// Turn signals auto-blink at ~1.5Hz when enabled
+void telltale_broadcaster(std::string node)
+{
+    int sockfd;
+    struct sockaddr_can addr;
+    struct ifreq ifr;
+
+    if ((sockfd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
+    {
+        perror("Telltale CAN socket creation failed");
+        return;
+    }
+
+    strncpy(ifr.ifr_name, node.c_str(), IFNAMSIZ - 1);
+    ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+    if (ioctl(sockfd, SIOCGIFINDEX, &ifr) < 0)
+    {
+        perror("Telltale CAN interface not found");
+        close(sockfd);
+        return;
+    }
+
+    addr.can_family = AF_CAN;
+    addr.can_ifindex = ifr.ifr_ifindex;
+
+    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+    {
+        perror("Telltale CAN socket bind failed");
+        close(sockfd);
+        return;
+    }
+
+    std::cout << "Telltale broadcaster started on interface:" << node << std::endl;
+
+    int blink_counter = 0;
+    const int BLINK_TOGGLE_COUNT = 3; // toggle every 3×200ms = 600ms ≈ 1.67Hz
+
+    while (running)
+    {
+        unsigned short state = telltale_state.load();
+
+        // Auto-blink turn signals: toggle bits 4 (left) and 5 (right) at ~1.5Hz
+        blink_counter++;
+        bool blink_on = (blink_counter / BLINK_TOGGLE_COUNT) % 2 == 0;
+        unsigned short blink_mask = state & 0x0030; // bits 4,5 = turn signals
+        unsigned short wire_state;
+        if (blink_on)
+            wire_state = state; // show turn signals as-is
+        else
+            wire_state = state & ~0x0030u; // suppress turn signals during off phase
+
+        struct can_frame frame;
+        frame.can_id = 0x420;
+        frame.can_dlc = 2;
+        frame.data[0] = wire_state & 0xFF;
+        frame.data[1] = (wire_state >> 8) & 0xFF;
+
+        if (write(sockfd, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame))
+            perror("Telltale write");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    close(sockfd);
+    std::cout << "Telltale broadcaster stopped.\n";
+}
+/*****************************************************************************/
 // Read key=value config file, skipping comments and blank lines
 static std::map<std::string, std::string> read_config(const std::string &path)
 {
@@ -465,11 +586,13 @@ int main(int argc, char* argv[])
 
     // Create threads
     std::thread socket_thread(socket_listener, bind_all, port);
-    std::thread canbus_thread(canbus_listener,debugflag,node);
+    std::thread canbus_thread(canbus_listener, debugflag, node);
+    std::thread telltale_thread(telltale_broadcaster, node);
 
     // Wait for threads to complete
     socket_thread.join();
     canbus_thread.join();
+    telltale_thread.join();
 
     std::cout << "All threads have exited. Program terminated.\n";
     return 0;
