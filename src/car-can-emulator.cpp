@@ -64,7 +64,7 @@ static bool parse_int(const std::string &s, long &out, long min_val, long max_va
 }
 /*****************************************************************************/
 // Function to listen on a Linux socket
-void socket_listener(bool bind_all)
+void socket_listener(bool bind_all, int port)
 {
     int sockfd;
     struct sockaddr_in server_addr;
@@ -78,7 +78,7 @@ void socket_listener(bool bind_all)
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = bind_all ? INADDR_ANY : htonl(INADDR_LOOPBACK);
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(port);
 
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Socket bind failed");
@@ -92,7 +92,7 @@ void socket_listener(bool bind_all)
         return;
     }
 
-    std::cout << "Socket listener started on port 8080.\n";
+    std::cout << "Socket listener started on port " << port << ".\n";
     while (running)
     {
         int new_socket;
@@ -307,6 +307,7 @@ void printHelp(std::string program)
                 << "Options:\n"
                 << "  --node=<canx>       Specify the can0/can1 node(or --node <canx>)\n"
                 << "  --debugprint=<flag> Specify the true/false debug print (or --debugprint <flag>)\n"
+                << "  --port=<N>          TCP port for control interface (default: 8080)\n"
                 << "  --bind-all          Bind TCP socket to all interfaces (default: localhost only)\n"
                 << "  --help              Display this help message\n";
 }
@@ -318,6 +319,7 @@ int main(int argc, char* argv[])
     std::string debugprint = "Unknown";
     bool debugflag=false;
     bool bind_all=false;
+    int port=8080;
 
     // If no arguments or --help is passed, print the help message
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--help"))
@@ -347,6 +349,14 @@ int main(int argc, char* argv[])
         else if (arg == "--debugprint" && i + 1 < argc)
             debugprint = argv[++i];  // Get the next argument as the debugprint
 
+        // Check for --port= format
+        else if (arg.rfind("--port=", 0) == 0)
+            port = std::stoi(arg.substr(7));
+
+        // Check for --port followed by value
+        else if (arg == "--port" && i + 1 < argc)
+            port = std::stoi(argv[++i]);
+
         // Check for --bind-all flag
         else if (arg == "--bind-all")
             bind_all = true;
@@ -368,7 +378,7 @@ int main(int argc, char* argv[])
     std::signal(SIGINT, handle_signal);
 
     // Create threads
-    std::thread socket_thread(socket_listener, bind_all);
+    std::thread socket_thread(socket_listener, bind_all, port);
     std::thread canbus_thread(canbus_listener,debugflag,node);
 
     // Wait for threads to complete
