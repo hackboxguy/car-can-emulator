@@ -33,7 +33,7 @@ endif()
 
 # Build instructions:
 #   Local:     cmake -H. -BOutput && cmake --build Output
-#   systemd:   cmake -H. -BOutput -DPLATFORM=systemd && cmake --build Output
+#   systemd:   cmake -H. -BOutput -DPLATFORM=systemd -DCMAKE_INSTALL_PREFIX=/usr && cmake --build Output
 #   OpenWrt:   cmake -H. -BOutput -DPLATFORM=openwrt -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain.cmake && cmake --build Output
 #   Install:   cmake --build Output -- install
 #   Clean:     rm -rf Output

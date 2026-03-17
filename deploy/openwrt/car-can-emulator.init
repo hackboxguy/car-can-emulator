@@ -7,13 +7,14 @@ CONF=/etc/car-can-emulator.conf
 SERVICE_WRITE_PID=1
 SERVICE_DAEMONIZE=1
 
-# Read a key from the config file, with a default fallback
+# Read a key from the config file, with a default fallback.
+# Handles both "KEY=value" and "KEY = value" formats to match the daemon's parser.
 read_conf() {
-	local key="$1" default="$2"
+	local key="$1" default="$2" val=""
 	if [ -f "$CONF" ]; then
-		val=$(grep "^${key}=" "$CONF" 2>/dev/null | head -1 | cut -d'=' -f2-)
-		# trim whitespace
-		val=$(echo "$val" | tr -d ' \t')
+		val=$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*\(.*\)/\1/p" "$CONF" 2>/dev/null | head -1)
+		# trim trailing whitespace
+		val=$(echo "$val" | sed 's/[[:space:]]*$//')
 	fi
 	echo "${val:-$default}"
 }

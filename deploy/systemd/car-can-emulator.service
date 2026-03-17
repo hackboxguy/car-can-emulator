@@ -4,11 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/default/car-can-emulator
-ExecStartPre=-/sbin/ip link set ${CAN_NODE:-can0} type can bitrate ${CAN_BITRATE:-500000}
-ExecStartPre=-/sbin/ip link set up ${CAN_NODE:-can0}
+# Read CAN_NODE and CAN_BITRATE from the same config file the daemon uses.
+# Defaults: CAN_NODE=can0, CAN_BITRATE=500000
+# The daemon reads all other settings (TCP_PORT, SIMULATE, etc.) from this file directly.
+EnvironmentFile=-/etc/car-can-emulator.conf
+ExecStartPre=/bin/sh -c '/sbin/ip link set ${CAN_NODE:-can0} type can bitrate ${CAN_BITRATE:-500000} 2>/dev/null || true'
+ExecStartPre=/bin/sh -c '/sbin/ip link set up ${CAN_NODE:-can0}'
 ExecStart=/usr/sbin/car-can-emulator
-ExecStopPost=-/sbin/ip link set down ${CAN_NODE:-can0}
+ExecStopPost=/bin/sh -c '/sbin/ip link set down ${CAN_NODE:-can0} 2>/dev/null || true'
 Restart=on-failure
 RestartSec=5
 

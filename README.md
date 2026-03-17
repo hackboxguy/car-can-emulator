@@ -118,7 +118,7 @@ SIMULATE_SPEED=1.0
 ### Raspberry Pi OS Lite / systemd
 
 ```bash
-cmake -H. -BOutput -DPLATFORM=systemd
+cmake -H. -BOutput -DPLATFORM=systemd -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build Output
 sudo cmake --install Output
 sudo systemctl enable car-can-emulator
@@ -126,7 +126,7 @@ sudo systemctl start car-can-emulator
 ```
 
 The systemd unit file handles CAN interface setup/teardown automatically.
-Edit `/etc/default/car-can-emulator` to override `CAN_NODE` or `CAN_BITRATE`, or edit `/etc/car-can-emulator.conf` for application settings.
+All settings are read from `/etc/car-can-emulator.conf` — edit `CAN_NODE`, `CAN_BITRATE`, `TCP_PORT`, `SIMULATE`, etc. in that single file.
 
 ### Buildroot
 
@@ -153,7 +153,7 @@ The init script reads settings from `/etc/car-can-emulator.conf`.
 
 ```bash
 # Local:     cmake -H. -BOutput && cmake --build Output
-# systemd:   cmake -H. -BOutput -DPLATFORM=systemd && cmake --build Output
+# systemd:   cmake -H. -BOutput -DPLATFORM=systemd -DCMAKE_INSTALL_PREFIX=/usr && cmake --build Output
 # OpenWrt:   cmake -H. -BOutput -DPLATFORM=openwrt -DCMAKE_TOOLCHAIN_FILE=... && cmake --build Output
 # Install:   sudo cmake --install Output
 # Clean:     rm -rf Output
