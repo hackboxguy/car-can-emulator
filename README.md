@@ -10,7 +10,7 @@ CAN bus emulator for testing OBD2 devices such as Head-up-displays/car-TCUs/etc.
 3. ```sudo ifconfig can0 up```
 4. ```cmake -H. -BOutput```
 5. ```cmake --build Output -- all```
-6. ```./Output/car-can-emulator --node=can0 --debugprint=true```
+6. ```./Output/car-can-emulator --node=can0 --car=ice --debugprint=true```
 7. From a second terminal, run ``` echo -n speed | nc 127.0.0.1 8080``` to read the current speed
 8. From a second terminal, run ``` echo -n "speed 90" | nc 127.0.0.1 8080``` to set the current speed
 
@@ -18,10 +18,25 @@ Without hardware, a virtual bus works the same way: `sudo ip link add dev vcan1 
 
 # What it emulates
 
-An OBD-II ECU answering functional requests on `0x7DF` from `0x7E8`, plus a
-body-controller style telltale broadcast. It advertises exactly the PIDs it
-serves in the supported-PID bitmaps (`0x00`, `0x20`, ... `0xC0`) and, like a
-real ECU, does not answer a PID it lacks.
+`--car=ice` (default), `--car=ev` or `--car=hybrid`. Every car type runs an
+OBD-II ECU answering functional requests on `0x7DF` from `0x7E8`, plus a
+body-controller style telltale broadcast on `0x420`. The ECU advertises
+exactly the PIDs it serves in the supported-PID bitmaps (`0x00`, `0x20`, ...)
+and, like a real ECU, does not answer a PID it lacks:
+
+| Car | PIDs served |
+|---|---|
+| `ice` | `04 05 0B 0C 0D 10 2F 42 46 A6` |
+| `ev` | `0D 42 46 5B A6` (no engine, no fuel) |
+| `hybrid` | `04 05 0B 0C 0D 10 2F 42 46 5B A6` |
+
+`ev` and `hybrid` add a battery/drive ECU answering UDS `0x22`
+ReadDataByIdentifier over ISO-TP on `0x7E4`/`0x7EC` (Linux `can-isotp`
+socket; load the module with `sudo modprobe can_isotp`). Its three DIDs
+carry pack voltage/current, state of charge/health, charging state, range,
+consumption, odometer, gear, power state, motor speed and motor power, all
+as multi-frame transfers. The record layouts are documented in
+`car-can-proxy/docs/emulator-ev-profile.md`.
 
 | PID | Signal | netcat knob | Unit |
 |---|---|---|---|
@@ -35,7 +50,13 @@ real ECU, does not answer a PID it lacks.
 | `0x42` | control module voltage | `volt <V>` | volts |
 | `0x46` | ambient air temperature | `ambient <degC>` | degrees C |
 | `0xA6` | odometer | `odo <km>` | km |
+| `0x5B` (ev, hybrid) | hybrid battery pack remaining life | (follows `soc`) | percent |
 | `0x420` (broadcast, 100 ms) | telltale bitmask, 32-bit little-endian | `tt <mask>` | hex or decimal |
+
+Battery ECU knobs (`ev`, `hybrid`): `soc <pct>`, `soh <pct>`, `packv <V>`,
+`packi <A>` (negative = charging), `chg <0-3>`, `range <km>`, `cons <Wh/km>`,
+`gear <P|R|N|D|L>`, `pwr <0-3>`, `mrpm <rpm>`, `power <kW>` (negative =
+regeneration). `car` reads the current car type.
 
 A knob without a value reads the current setting. The `speed`, `rpm`, `temp`,
 `flow`, `intake` and `load` knobs keep their historical raw semantics; the
@@ -48,7 +69,14 @@ the `car-can-proxy` contract.
 # Used with car-can-proxy
 
 `car-can-proxy` (https://github.com/hackboxguy/car-can-proxy) reads this
-emulator through its `obd2-ice` plugin and publishes a vehicle-independent
-contract for instrument-cluster apps; its integration tests run this emulator
-on `vcan1`. EV and hybrid modes for the emulator are planned there.
+emulator through its `obd2-ice`, `emu-ev` and `emu-hybrid` plugins and
+publishes a vehicle-independent contract for instrument-cluster apps; its
+integration tests run this emulator on `vcan1` in all three car types.
+
+# Source layout
+
+`src/main.cpp` arguments and threads; `src/State.*` the emulated car's
+values and served-PID set; `src/ObdEcu.cpp` the J1979 responder;
+`src/BmsEcu.cpp` the UDS/ISO-TP battery ECU; `src/Telltales.cpp` the
+`0x420` broadcast; `src/Control.cpp` the port-8080 knobs.
 
