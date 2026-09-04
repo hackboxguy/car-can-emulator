@@ -1,4 +1,4 @@
-// Battery / drive ECU for ev and hybrid: UDS ReadDataByIdentifier (0x22)
+// Battery / drive / driver-assist ECU for ev and hybrid: UDS ReadDataByIdentifier (0x22)
 // over ISO-TP, tester 0x7E4 -> ECU 0x7EC, using the kernel's CAN_ISOTP
 // socket so every answer is a genuine multi-frame transfer. The DID set is
 // the "reference EV profile" documented in car-can-proxy
@@ -48,6 +48,14 @@ static bool buildDid(uint16_t did, std::vector<uint8_t> &out)
         out.push_back((uint8_t)s.powerState);
         put16(out, s.motorRpm);
         put16(out, (int)(s.motorPowerKw * 10.0 + (s.motorPowerKw >= 0 ? 0.5 : -0.5)) & 0xFFFF);
+        put16(out, 0);
+        return true;
+    case 0x0104:   // driver assist
+        out.push_back((uint8_t)s.ecoScore);
+        out.push_back((uint8_t)s.speedLimit);
+        out.push_back((uint8_t)s.collisionRisk);
+        out.push_back((uint8_t)s.laneState);
+        put16(out, (int)(s.leadGapM * 10.0 + 0.5));
         put16(out, 0);
         return true;
     default:

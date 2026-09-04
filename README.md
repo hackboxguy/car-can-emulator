@@ -32,10 +32,11 @@ and, like a real ECU, does not answer a PID it lacks:
 
 `ev` and `hybrid` add a battery/drive ECU answering UDS `0x22`
 ReadDataByIdentifier over ISO-TP on `0x7E4`/`0x7EC` (Linux `can-isotp`
-socket; load the module with `sudo modprobe can_isotp`). Its three DIDs
+socket; load the module with `sudo modprobe can_isotp`). Its four DIDs
 carry pack voltage/current, state of charge/health, charging state, range,
-consumption, odometer, gear, power state, motor speed and motor power, all
-as multi-frame transfers. The record layouts are documented in
+consumption, odometer, gear, power state, motor speed, motor power, and a
+driver-assist record (eco score, posted speed limit, collision risk, lane
+state, lead-vehicle gap), all as multi-frame transfers. The record layouts are documented in
 `car-can-proxy/docs/emulator-ev-profile.md`.
 
 | PID | Signal | netcat knob | Unit |
@@ -56,7 +57,9 @@ as multi-frame transfers. The record layouts are documented in
 Battery ECU knobs (`ev`, `hybrid`): `soc <pct>`, `soh <pct>`, `packv <V>`,
 `packi <A>` (negative = charging), `chg <0-3>`, `range <km>`, `cons <Wh/km>`,
 `gear <P|R|N|D|L>`, `pwr <0-3>`, `mrpm <rpm>`, `power <kW>` (negative =
-regeneration). `car` reads the current car type.
+regeneration). Driver-assist record (DID `0x0104`): `eco <0-100>`,
+`limit <km/h>` (0 = none known), `risk <0-3>`, `lane <mask>`, `gap <m>`.
+`car` reads the current car type.
 
 A knob without a value reads the current setting. The `speed`, `rpm`, `temp`,
 `flow`, `intake` and `load` knobs keep their historical raw semantics; the

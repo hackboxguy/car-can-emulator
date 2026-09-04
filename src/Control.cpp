@@ -57,6 +57,12 @@ std::string handle(const std::string &cmdIn, const std::string &arg)
     else if (cmd == "pwr")     { if (set) s.powerState = (int)clampi(atol(arg.c_str()), 0, 3); else sprintf(out, "%d\n", s.powerState); }
     else if (cmd == "mrpm")    { if (set) s.motorRpm = (int)clampi(atol(arg.c_str()), 0, 65000); else sprintf(out, "%d\n", s.motorRpm); }
     else if (cmd == "power")   { if (set) s.motorPowerKw = clampd(atof(arg.c_str()), -3000, 3000); else sprintf(out, "%.1f\n", s.motorPowerKw); }
+    // driver-assist ECU
+    else if (cmd == "eco")     { if (set) s.ecoScore = (int)clampi(atol(arg.c_str()), 0, 100); else sprintf(out, "%d\n", s.ecoScore); }
+    else if (cmd == "limit")   { if (set) s.speedLimit = (int)clampi(atol(arg.c_str()), 0, 254); else sprintf(out, "%d\n", s.speedLimit); }
+    else if (cmd == "risk")    { if (set) s.collisionRisk = (int)clampi(atol(arg.c_str()), 0, 3); else sprintf(out, "%d\n", s.collisionRisk); }
+    else if (cmd == "lane")    { if (set) s.laneState = (int)clampi(strtol(arg.c_str(), NULL, 0), 0, 15); else sprintf(out, "%d\n", s.laneState); }
+    else if (cmd == "gap")     { if (set) s.leadGapM = clampd(atof(arg.c_str()), 0, 6000); else sprintf(out, "%.1f\n", s.leadGapM); }
     else if (cmd == "car")     { sprintf(out, "%s\n", EmuState::carName(s.car)); }
     else                       { sprintf(out, "unknown command\n"); }
     return out;

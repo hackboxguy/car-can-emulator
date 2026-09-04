@@ -41,6 +41,13 @@ struct EmuState {
     int motorRpm = 6600;
     double motorPowerKw = 21.3;       // negative = regeneration
 
+    // Driver-assist ECU record (ev, hybrid): what an ADAS unit would report.
+    int ecoScore = 78;                // 0..100
+    int speedLimit = 50;              // km/h, 0 = none known
+    int collisionRisk = 0;            // 0 none, 1 low, 2 medium, 3 high
+    int laneState = 3;                // b0 left seen, b1 right seen, b2/b3 departures
+    double leadGapM = 42.0;
+
     // PIDs the OBD ECU serves for the current car type; bitmaps derive from it.
     std::set<uint8_t> servedPids;
     void selectCar(CarType c);
