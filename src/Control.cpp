@@ -1,5 +1,6 @@
 // Control port: "knob" reads, "knob value" writes, one command per TCP
 // connection on port 8080 (echo -n "speed 90" | nc 127.0.0.1 8080).
+#include "DriveCycle.h"
 #include "State.h"
 #include "Threads.h"
 
@@ -65,6 +66,10 @@ std::string handle(const std::string &cmdIn, const std::string &arg)
     else if (cmd == "gap")     { if (set) s.leadGapM = clampd(atof(arg.c_str()), 0, 6000); else sprintf(out, "%.1f\n", s.leadGapM); }
     else if (cmd == "car")     { sprintf(out, "%s\n", EmuState::carName(s.car)); }
     else if (cmd == "reset")   { s.resetKnobs(); sprintf(out, "ok\n"); }
+    else if (cmd == "cycle")   {   // pause/resume the drive cycle; knobs win while paused
+        if (set) g_cycleRunning = (arg == "start" || arg == "1" || arg == "on");
+        else sprintf(out, "%s\n", g_cycleRunning ? "running" : "stopped");
+    }
     else                       { sprintf(out, "unknown command\n"); }
     return out;
 }

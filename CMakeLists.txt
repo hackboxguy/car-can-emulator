@@ -11,11 +11,12 @@ set(CMAKE_CXX_STANDARD 17)
 #include_directories(${LIBEVDEV_INCLUDE_DIRS})
 #link_directories(${LIBEVDEV_LIBRARY_DIRS})
 
-add_executable(${PROJECT_NAME} src/main.cpp src/State.cpp src/ObdEcu.cpp src/BmsEcu.cpp src/Telltales.cpp src/Control.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/State.cpp src/ObdEcu.cpp src/BmsEcu.cpp src/Telltales.cpp src/Control.cpp src/DriveCycle.cpp)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
 target_link_libraries(${PROJECT_NAME} pthread) #${LIBEVDEV_LIBRARIES})
 install(TARGETS ${COMPONENT_NAME} DESTINATION usr/sbin)
 install(PROGRAMS ${WRTSTARTUP_SCRIPT} DESTINATION etc/init.d) #copy server's startup script to init.d
+install(FILES cycles/demo.cycle DESTINATION share/car-can-emulator/cycles)
 
 #for cross compiling
 #cmake -H. -BOutput -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain-arm-backup.cmake -DCMAKE_INSTALL_PREFIX=/home/user/tmp/

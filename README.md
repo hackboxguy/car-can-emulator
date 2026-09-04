@@ -77,6 +77,18 @@ Telltale bits 0-11: engine, oil, battery, brake, left, right, high beam, door,
 seatbelt, ABS, traction, TPMS. Bits 12-19 are the EV/hybrid lamps defined by
 the `car-can-proxy` contract.
 
+# Drive cycle
+
+`--drive-cycle=cycles/demo.cycle` loops a scripted drive: speed, rpm and
+coolant interpolate through 12 phases over 44 s, lamps switch at the phase
+boundaries, fuel drains over the lap, and (ev/hybrid) motor power, state of
+charge, consumption, range, gear and the driver-assist record follow the
+same formulas as qt-cluster-demo's built-in demo, so the proxy path looks
+like `--demo`. The file format is documented in `cycles/demo.cycle`; write
+another file for a different drive. `cycle stop` / `cycle start` on the
+control port pause and resume it (knobs win while paused; `cycle` reads
+the state). Without the flag the car sits at fixed values as before.
+
 # As a service (Pi, systemd)
 
 ```bash
@@ -85,7 +97,8 @@ sudo systemctl enable --now /home/pi/car-can-emulator/systemd/car-can-emulator.s
 journalctl -u car-can-emulator -f
 ```
 
-The unit runs `--node=vcan1 --car=ev` by default; copy
+The unit runs `--node=vcan1 --car=ev` by default (the Pi image from
+misc-tools uses `--car=hybrid --drive-cycle=...`); copy
 `systemd/car-can-emulator.env.example` to `systemd/car-can-emulator.env` to
 change it. It is ordered after `can-proxy-links.service` from
 `car-can-proxy`, which creates `vcan1`. The OpenWrt init script
