@@ -64,6 +64,7 @@ std::string handle(const std::string &cmdIn, const std::string &arg)
     else if (cmd == "lane")    { if (set) s.laneState = (int)clampi(strtol(arg.c_str(), NULL, 0), 0, 15); else sprintf(out, "%d\n", s.laneState); }
     else if (cmd == "gap")     { if (set) s.leadGapM = clampd(atof(arg.c_str()), 0, 6000); else sprintf(out, "%.1f\n", s.leadGapM); }
     else if (cmd == "car")     { sprintf(out, "%s\n", EmuState::carName(s.car)); }
+    else if (cmd == "reset")   { s.resetKnobs(); sprintf(out, "ok\n"); }
     else                       { sprintf(out, "unknown command\n"); }
     return out;
 }

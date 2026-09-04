@@ -61,9 +61,17 @@ regeneration). Driver-assist record (DID `0x0104`): `eco <0-100>`,
 `limit <km/h>` (0 = none known), `risk <0-3>`, `lane <mask>`, `gap <m>`.
 `car` reads the current car type.
 
-A knob without a value reads the current setting. The `speed`, `rpm`, `temp`,
-`flow`, `intake` and `load` knobs keep their historical raw semantics; the
-newer knobs take physical units.
+A knob without a value reads the current setting; `reset` puts every knob
+back to the defaults below without restarting (the CAN sockets stay up, so
+a proxy reading the emulator sees no link loss). The `speed`, `rpm`,
+`temp`, `flow`, `intake` and `load` knobs keep their historical raw
+semantics; the newer knobs take physical units.
+
+Defaults: `speed 88`, `rpm 12` (768 rpm), `temp 35` (-5 degC), `flow 1344`,
+`intake 0`, `load 0`, `fuel 75`, `volt 12.6`, `ambient 23`, `odo 10568.7`,
+`tt 0`; battery ECU `soc 80`, `soh 97`, `packv 388`, `packi 55`, `chg 0`,
+`range 290`, `cons 165`, `gear D`, `pwr 3`, `mrpm 6600`, `power 21.3`;
+driver assist `eco 78`, `limit 50`, `risk 0`, `lane 3`, `gap 42`.
 
 Telltale bits 0-11: engine, oil, battery, brake, left, right, high beam, door,
 seatbelt, ABS, traction, TPMS. Bits 12-19 are the EV/hybrid lamps defined by

@@ -51,6 +51,8 @@ struct EmuState {
     // PIDs the OBD ECU serves for the current car type; bitmaps derive from it.
     std::set<uint8_t> servedPids;
     void selectCar(CarType c);
+    // Every knob back to the values a fresh start has (car type kept).
+    void resetKnobs();
     uint32_t supportedBitmap(uint8_t base) const;   // caller holds mutex or is single-threaded at startup
     bool hasBms() const { return car != CarType::Ice; }
     static const char *carName(CarType c);

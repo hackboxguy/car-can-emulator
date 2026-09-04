@@ -2,6 +2,23 @@
 
 EmuState g_state;
 
+void EmuState::resetKnobs()
+{
+    EmuState fresh;
+    fresh.selectCar(car);
+    speed = fresh.speed; temp = fresh.temp; rpm = fresh.rpm; flow = fresh.flow;
+    intake = fresh.intake; load = fresh.load;
+    fuel = fresh.fuel; volt = fresh.volt; ambient = fresh.ambient; odo = fresh.odo;
+    telltales = fresh.telltales;
+    packVoltage = fresh.packVoltage; packCurrent = fresh.packCurrent;
+    soc = fresh.soc; soh = fresh.soh; charging = fresh.charging;
+    rangeKm = fresh.rangeKm; consumption = fresh.consumption;
+    gear = fresh.gear; powerState = fresh.powerState;
+    motorRpm = fresh.motorRpm; motorPowerKw = fresh.motorPowerKw;
+    ecoScore = fresh.ecoScore; speedLimit = fresh.speedLimit;
+    collisionRisk = fresh.collisionRisk; laneState = fresh.laneState; leadGapM = fresh.leadGapM;
+}
+
 void EmuState::selectCar(CarType c)
 {
     car = c;
