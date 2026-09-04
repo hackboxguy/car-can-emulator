@@ -66,6 +66,20 @@ Telltale bits 0-11: engine, oil, battery, brake, left, right, high beam, door,
 seatbelt, ABS, traction, TPMS. Bits 12-19 are the EV/hybrid lamps defined by
 the `car-can-proxy` contract.
 
+# As a service (Pi, systemd)
+
+```bash
+cmake -S . -B build && cmake --build build
+sudo systemctl enable --now /home/pi/car-can-emulator/systemd/car-can-emulator.service
+journalctl -u car-can-emulator -f
+```
+
+The unit runs `--node=vcan1 --car=ev` by default; copy
+`systemd/car-can-emulator.env.example` to `systemd/car-can-emulator.env` to
+change it. It is ordered after `can-proxy-links.service` from
+`car-can-proxy`, which creates `vcan1`. The OpenWrt init script
+(`WrtCarCanEmulatorStartupScr`) is unchanged for `can0` boards.
+
 # Used with car-can-proxy
 
 `car-can-proxy` (https://github.com/hackboxguy/car-can-proxy) reads this

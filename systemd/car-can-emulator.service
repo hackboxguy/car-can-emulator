@@ -1,0 +1,23 @@
+[Unit]
+Description=Bench vehicle: OBD-II ECU, telltales and (ev/hybrid) battery ECU on a CAN interface
+Documentation=file:///home/pi/car-can-emulator/README.md
+# The car-can-proxy repository's can-proxy-links.service creates vcan1;
+# harmless ordering when it is not installed.
+After=can-proxy-links.service
+ConditionPathExists=/home/pi/car-can-emulator/build/car-can-emulator
+
+[Service]
+Type=simple
+User=pi
+# Defaults; systemd/car-can-emulator.env overrides. Control port 8080 stays
+# on the box: echo -n "car" | nc 127.0.0.1 8080
+Environment="EMULATOR_ARGS=--node=vcan1 --car=ev"
+EnvironmentFile=-/home/pi/car-can-emulator/systemd/car-can-emulator.env
+ExecStart=/home/pi/car-can-emulator/build/car-can-emulator $EMULATOR_ARGS
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
