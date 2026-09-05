@@ -58,6 +58,37 @@ static bool buildDid(uint16_t did, std::vector<uint8_t> &out)
         put16(out, (int)(s.leadGapM * 10.0 + 0.5));
         put16(out, 0);
         return true;
+    case 0x0105:   // cruise control and drive mode
+        out.push_back((uint8_t)s.cruiseState);
+        put16(out, (int)(s.cruiseSetKmh * 10.0 + 0.5));
+        out.push_back((uint8_t)s.cruiseGap);
+        out.push_back((uint8_t)s.driveMode);
+        out.push_back(0); put16(out, 0);
+        return true;
+    case 0x0106:   // tires
+        for (int i = 0; i < 4; i++) out.push_back((uint8_t)(s.tirePressure[i] * 20.0 + 0.5));
+        for (int i = 0; i < 4; i++) out.push_back((uint8_t)(int8_t)s.tireTemp[i]);
+        return true;
+    case 0x0107:   // trip statistics
+        put32(out, (uint32_t)(s.tripKm * 10.0 + 0.5));
+        put16(out, s.tripMin);
+        out.push_back((uint8_t)s.tripAvgKmh);
+        out.push_back((uint8_t)(s.tripFuelL100 * 10.0 + 0.5));
+        return true;
+    case 0x0108:   // charge session
+        put16(out, (int)(s.chargeKw * 10.0 + (s.chargeKw >= 0 ? 0.5 : -0.5)) & 0xFFFF);
+        out.push_back((uint8_t)(s.chargeTargetPct * 2.0 + 0.5));
+        put16(out, s.chargeMin);
+        out.push_back((uint8_t)s.plug);
+        put16(out, 0);
+        return true;
+    case 0x0109:   // occupancy
+        out.push_back((uint8_t)s.belts);
+        out.push_back((uint8_t)s.seats);
+        out.push_back((uint8_t)s.doors);
+        out.push_back((uint8_t)s.windows);
+        put32(out, 0);
+        return true;
     default:
         return false;
     }

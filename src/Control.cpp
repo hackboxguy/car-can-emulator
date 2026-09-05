@@ -37,6 +37,11 @@ std::string handle(const std::string &cmdIn, const std::string &arg)
     else if (cmd == "flow")    { if (set) s.flow = atoi(arg.c_str()); else sprintf(out, "%d\n", s.flow); }
     else if (cmd == "intake")  { if (set) s.intake = atoi(arg.c_str()); else sprintf(out, "%d\n", s.intake); }
     else if (cmd == "load")    { if (set) s.load = atoi(arg.c_str()); else sprintf(out, "%d\n", s.load); }
+    // v1.2 engine detail PIDs, physical units
+    else if (cmd == "iat")     { if (set) s.iat = (int)clampi(atol(arg.c_str()), -40, 215); else sprintf(out, "%d\n", s.iat); }
+    else if (cmd == "throttle"){ if (set) s.throttle = (int)clampi(atol(arg.c_str()), 0, 100); else sprintf(out, "%d\n", s.throttle); }
+    else if (cmd == "baro")    { if (set) s.baro = (int)clampi(atol(arg.c_str()), 0, 255); else sprintf(out, "%d\n", s.baro); }
+    else if (cmd == "oilt")    { if (set) s.oilTemp = (int)clampi(atol(arg.c_str()), -40, 215); else sprintf(out, "%d\n", s.oilTemp); }
     // physical-unit knobs
     else if (cmd == "fuel")    { if (set) s.fuel = (unsigned char)(clampi(atol(arg.c_str()), 0, 100) * 255 / 100); else sprintf(out, "%d\n", s.fuel * 100 / 255); }
     else if (cmd == "volt")    { if (set) s.volt = (unsigned short)(atof(arg.c_str()) * 1000.0 + 0.5); else sprintf(out, "%.3f\n", s.volt / 1000.0); }
@@ -64,6 +69,35 @@ std::string handle(const std::string &cmdIn, const std::string &arg)
     else if (cmd == "risk")    { if (set) s.collisionRisk = (int)clampi(atol(arg.c_str()), 0, 3); else sprintf(out, "%d\n", s.collisionRisk); }
     else if (cmd == "lane")    { if (set) s.laneState = (int)clampi(strtol(arg.c_str(), NULL, 0), 0, 15); else sprintf(out, "%d\n", s.laneState); }
     else if (cmd == "gap")     { if (set) s.leadGapM = clampd(atof(arg.c_str()), 0, 6000); else sprintf(out, "%.1f\n", s.leadGapM); }
+    // v1.2 records
+    else if (cmd == "cruise")  { if (set) s.cruiseState = (int)clampi(atol(arg.c_str()), 0, 3); else sprintf(out, "%d\n", s.cruiseState); }
+    else if (cmd == "setspd")  { if (set) s.cruiseSetKmh = clampd(atof(arg.c_str()), 0, 6000); else sprintf(out, "%.1f\n", s.cruiseSetKmh); }
+    else if (cmd == "gapset")  { if (set) s.cruiseGap = (int)clampi(atol(arg.c_str()), 0, 4); else sprintf(out, "%d\n", s.cruiseGap); }
+    else if (cmd == "mode")    { if (set) s.driveMode = (int)clampi(atol(arg.c_str()), 0, 7); else sprintf(out, "%d\n", s.driveMode); }
+    else if (cmd == "tp")      { if (set) for (double &p : s.tirePressure) p = clampd(atof(arg.c_str()), 0, 12.7);
+                                 else sprintf(out, "%.2f %.2f %.2f %.2f\n", s.tirePressure[0], s.tirePressure[1], s.tirePressure[2], s.tirePressure[3]); }
+    else if (cmd.size() == 3 && cmd.compare(0, 2, "tp") == 0 && cmd[2] >= '0' && cmd[2] <= '3') {
+        double &p = s.tirePressure[cmd[2] - '0'];
+        if (set) p = clampd(atof(arg.c_str()), 0, 12.7); else sprintf(out, "%.2f\n", p);
+    }
+    else if (cmd == "ttire")   { if (set) for (int &t : s.tireTemp) t = (int)clampi(atol(arg.c_str()), -127, 127);
+                                 else sprintf(out, "%d %d %d %d\n", s.tireTemp[0], s.tireTemp[1], s.tireTemp[2], s.tireTemp[3]); }
+    else if (cmd.size() == 6 && cmd.compare(0, 5, "ttire") == 0 && cmd[5] >= '0' && cmd[5] <= '3') {
+        int &t = s.tireTemp[cmd[5] - '0'];
+        if (set) t = (int)clampi(atol(arg.c_str()), -127, 127); else sprintf(out, "%d\n", t);
+    }
+    else if (cmd == "tripkm")  { if (set) s.tripKm = clampd(atof(arg.c_str()), 0, 400000000.0); else sprintf(out, "%.1f\n", s.tripKm); }
+    else if (cmd == "tripmin") { if (set) s.tripMin = (int)clampi(atol(arg.c_str()), 0, 65000); else sprintf(out, "%d\n", s.tripMin); }
+    else if (cmd == "tripavg") { if (set) s.tripAvgKmh = (int)clampi(atol(arg.c_str()), 0, 254); else sprintf(out, "%d\n", s.tripAvgKmh); }
+    else if (cmd == "tripfuel"){ if (set) s.tripFuelL100 = clampd(atof(arg.c_str()), 0, 25.4); else sprintf(out, "%.1f\n", s.tripFuelL100); }
+    else if (cmd == "chgkw")   { if (set) s.chargeKw = clampd(atof(arg.c_str()), -3000, 3000); else sprintf(out, "%.1f\n", s.chargeKw); }
+    else if (cmd == "chgtarget"){ if (set) s.chargeTargetPct = clampd(atof(arg.c_str()), 0, 100); else sprintf(out, "%.1f\n", s.chargeTargetPct); }
+    else if (cmd == "chgmin")  { if (set) s.chargeMin = (int)clampi(atol(arg.c_str()), 0, 65000); else sprintf(out, "%d\n", s.chargeMin); }
+    else if (cmd == "plug")    { if (set) s.plug = (int)clampi(atol(arg.c_str()), 0, 2); else sprintf(out, "%d\n", s.plug); }
+    else if (cmd == "belts")   { if (set) s.belts = (unsigned)strtoul(arg.c_str(), NULL, 0) & 0x7F; else sprintf(out, "0x%02X\n", s.belts); }
+    else if (cmd == "seats")   { if (set) s.seats = (unsigned)strtoul(arg.c_str(), NULL, 0) & 0x7F; else sprintf(out, "0x%02X\n", s.seats); }
+    else if (cmd == "doors")   { if (set) s.doors = (unsigned)strtoul(arg.c_str(), NULL, 0) & 0x3F; else sprintf(out, "0x%02X\n", s.doors); }
+    else if (cmd == "windows") { if (set) s.windows = (unsigned)strtoul(arg.c_str(), NULL, 0) & 0x1F; else sprintf(out, "0x%02X\n", s.windows); }
     else if (cmd == "car")     { sprintf(out, "%s\n", EmuState::carName(s.car)); }
     else if (cmd == "reset")   { s.resetKnobs(); sprintf(out, "ok\n"); }
     else if (cmd == "cycle")   {   // pause/resume the drive cycle; knobs win while paused

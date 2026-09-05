@@ -18,8 +18,13 @@ struct EmuState {
     unsigned short temp = 35;         // PID 0x05 raw A (A - 40 degC)
     unsigned short rpm = 12;          // PID 0x0C raw A (rpm = A * 64)
     unsigned short flow = 0x0540;     // PID 0x10 raw
-    unsigned char intake = 0;         // PID 0x0B raw A
+    unsigned char intake = 100;       // PID 0x0B raw A: manifold pressure, kPa (100 = no boost)
     unsigned char load = 0;           // PID 0x04 raw A
+    // v1.2 engine detail over J1979 (ice, hybrid), physical units.
+    int iat = 30;                     // PID 0x0F intake air temperature, degC
+    int throttle = 0;                 // PID 0x11, percent
+    int baro = 101;                   // PID 0x33, kPa
+    int oilTemp = 95;                 // PID 0x5C, degC
 
     // Newer knobs take physical units.
     unsigned char fuel = 191;         // PID 0x2F raw A, 191 = 75 %
@@ -47,6 +52,26 @@ struct EmuState {
     int collisionRisk = 0;            // 0 none, 1 low, 2 medium, 3 high
     int laneState = 3;                // b0 left seen, b1 right seen, b2/b3 departures
     double leadGapM = 42.0;
+
+    // v1.2 records on the battery / body ECU (ev, hybrid), physical units.
+    int cruiseState = 0;              // DID 0x0105: 0 off, 1 standby, 2 active, 3 adaptive
+    double cruiseSetKmh = 0.0;        //   set speed, 0 = none
+    int cruiseGap = 0;                //   1..4, 0 = n/a
+    int driveMode = 0;                //   0 normal, 1 eco, 2 comfort, 3 sport, 4 sport+, 5 all-terrain, 6 snow, 7 custom
+    double tirePressure[4] = { 2.3, 2.3, 2.2, 2.2 };   // DID 0x0106, bar, FL FR RL RR
+    int tireTemp[4] = { 35, 35, 33, 33 };              //   degC
+    double tripKm = 12.3;             // DID 0x0107
+    int tripMin = 18;
+    int tripAvgKmh = 41;
+    double tripFuelL100 = 6.5;        //   combustion fuel economy
+    double chargeKw = 0.0;            // DID 0x0108
+    double chargeTargetPct = 80.0;
+    int chargeMin = 0;
+    int plug = 0;                     //   0 none, 1 connected, 2 locked
+    unsigned belts = 0x03;            // DID 0x0109: driver and front passenger fastened
+    unsigned seats = 0x03;
+    unsigned doors = 0x00;
+    unsigned windows = 0x00;
 
     // PIDs the OBD ECU serves for the current car type; bitmaps derive from it.
     std::set<uint8_t> servedPids;

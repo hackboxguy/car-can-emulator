@@ -105,6 +105,9 @@ void drive_cycle_thread(DriveCycle cycle)
     double powerFiltered = 0.0, efficiencyFiltered = 142.0;
     double soc = cycle.socStart, odometer = cycle.odometerStart;
     double leadGap = 45.0;
+    double tripKm = 0.0;
+    long tripMs = 0;
+    double tireHeat = 0.0;
     int limitKph = 50;
     int limitTimer = 0;
     uint32_t lamps = 0;
@@ -163,6 +166,15 @@ void drive_cycle_thread(DriveCycle cycle)
         if (braking && speed > 40.0) risk = 3;
         else if (leadGap < 6.0 + speed * 0.22) risk = 1;
 
+        // v1.2: engine detail follows the electric side's power figure; the
+        // cruise, tires, trip and occupancy records follow the phase.
+        tripKm += speed * dtHours;
+        tripMs += cycle.tickMs;
+        tireHeat += ((speed > 5.0 ? 1.0 : 0.0) - tireHeat) * cycle.tickMs / 30000.0;
+        const bool steady = p.speed0 == p.speed1 && speed > 60.0;
+        const int throttlePct = flow > 0 ? static_cast<int>(flow) : 0;
+        const int tripMin = static_cast<int>(tripMs / 60000);
+
         {
             std::lock_guard<std::mutex> lock(g_state.mutex);
             EmuState &s = g_state;
@@ -186,6 +198,24 @@ void drive_cycle_thread(DriveCycle cycle)
             s.leadGapM = leadGap;
             s.collisionRisk = risk;
             s.laneState = speed > 30.0 ? 3 : 0;
+            // v1.2
+            s.throttle = throttlePct;
+            s.intake = static_cast<unsigned char>(35 + throttlePct * 1.1);          // MAP kPa: vacuum at idle, boost at full power
+            s.oilTemp = static_cast<int>(coolant + 8.0);
+            s.iat = 30;
+            s.cruiseState = steady ? 2 : (speed > 30.0 ? 1 : 0);
+            s.cruiseSetKmh = steady ? speed : 0.0;
+            s.cruiseGap = steady ? 3 : 0;
+            for (int i = 0; i < 4; i++) {
+                s.tirePressure[i] = (i < 2 ? 2.3 : 2.2) + 0.15 * tireHeat;
+                s.tireTemp[i] = static_cast<int>(23.0 + 45.0 * tireHeat + (i < 2 ? 3 : 0));
+            }
+            s.tripKm = tripKm;
+            s.tripMin = tripMin;
+            s.tripAvgKmh = tripMs > 1000 ? static_cast<int>(tripKm / (tripMs / 3.6e6) + 0.5) : 0;
+            s.belts = (lamps & (1u << 8)) ? 0x01u : 0x03u;                          // seatbelt lamp: passenger unbuckled
+            s.doors = (lamps & (1u << 7)) ? 0x01u : 0x00u;                          // door lamp: front left ajar
+            s.windows = speed < 45.0 ? 0x01u : 0x00u;
         }
 
         phaseElapsed += cycle.tickMs;

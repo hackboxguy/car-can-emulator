@@ -8,6 +8,7 @@ void EmuState::resetKnobs()
     fresh.selectCar(car);
     speed = fresh.speed; temp = fresh.temp; rpm = fresh.rpm; flow = fresh.flow;
     intake = fresh.intake; load = fresh.load;
+    iat = fresh.iat; throttle = fresh.throttle; baro = fresh.baro; oilTemp = fresh.oilTemp;
     fuel = fresh.fuel; volt = fresh.volt; ambient = fresh.ambient; odo = fresh.odo;
     telltales = fresh.telltales;
     packVoltage = fresh.packVoltage; packCurrent = fresh.packCurrent;
@@ -17,6 +18,11 @@ void EmuState::resetKnobs()
     motorRpm = fresh.motorRpm; motorPowerKw = fresh.motorPowerKw;
     ecoScore = fresh.ecoScore; speedLimit = fresh.speedLimit;
     collisionRisk = fresh.collisionRisk; laneState = fresh.laneState; leadGapM = fresh.leadGapM;
+    cruiseState = fresh.cruiseState; cruiseSetKmh = fresh.cruiseSetKmh; cruiseGap = fresh.cruiseGap; driveMode = fresh.driveMode;
+    for (int i = 0; i < 4; i++) { tirePressure[i] = fresh.tirePressure[i]; tireTemp[i] = fresh.tireTemp[i]; }
+    tripKm = fresh.tripKm; tripMin = fresh.tripMin; tripAvgKmh = fresh.tripAvgKmh; tripFuelL100 = fresh.tripFuelL100;
+    chargeKw = fresh.chargeKw; chargeTargetPct = fresh.chargeTargetPct; chargeMin = fresh.chargeMin; plug = fresh.plug;
+    belts = fresh.belts; seats = fresh.seats; doors = fresh.doors; windows = fresh.windows;
 }
 
 void EmuState::selectCar(CarType c)
@@ -25,7 +31,7 @@ void EmuState::selectCar(CarType c)
     servedPids.clear();
     switch (c) {
     case CarType::Ice:
-        servedPids = { 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x10, 0x2F, 0x42, 0x46, 0xA6 };
+        servedPids = { 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x10, 0x11, 0x2F, 0x33, 0x42, 0x46, 0x5C, 0xA6 };
         break;
     case CarType::Ev:
         // No engine, no fuel: an EV's OBD port is thin. Everything else is
@@ -33,7 +39,7 @@ void EmuState::selectCar(CarType c)
         servedPids = { 0x0D, 0x42, 0x46, 0x5B, 0xA6 };
         break;
     case CarType::Hybrid:
-        servedPids = { 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x10, 0x2F, 0x42, 0x46, 0x5B, 0xA6 };
+        servedPids = { 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x10, 0x11, 0x2F, 0x33, 0x42, 0x46, 0x5B, 0x5C, 0xA6 };
         break;
     }
 }

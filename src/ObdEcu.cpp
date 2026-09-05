@@ -101,11 +101,15 @@ void canbus_listener(bool debugprint, std::string node)
             case 0x0B: frame.data[0]=0x03; frame.data[3]=s.intake; break;
             case 0x0C: frame.data[0]=0x04; frame.data[3]=s.rpm & 0xFF; frame.data[4]=(s.rpm >> 8); break;
             case 0x0D: frame.data[0]=0x03; frame.data[3]=s.speed & 0xFF; frame.data[4]=(s.speed >> 8); break;
+            case 0x0F: frame.data[0]=0x03; frame.data[3]=(unsigned char)(s.iat + 40); break;
             case 0x10: frame.data[0]=0x04; frame.data[3]=(s.flow >> 8); frame.data[4]=s.flow & 0xFF; break;
+            case 0x11: frame.data[0]=0x03; frame.data[3]=(unsigned char)(s.throttle * 255 / 100); break;
             case 0x2F: frame.data[0]=0x03; frame.data[3]=s.fuel; break;
+            case 0x33: frame.data[0]=0x03; frame.data[3]=(unsigned char)s.baro; break;
             case 0x42: frame.data[0]=0x04; frame.data[3]=(s.volt >> 8); frame.data[4]=s.volt & 0xFF; break;
             case 0x46: frame.data[0]=0x03; frame.data[3]=s.ambient; break;
             case 0x5B: frame.data[0]=0x03; frame.data[3]=(unsigned char)(s.soc * 255.0 / 100.0 + 0.5); break;
+            case 0x5C: frame.data[0]=0x03; frame.data[3]=(unsigned char)(s.oilTemp + 40); break;
             case 0xA6: frame.data[0]=0x06; frame.data[3]=(s.odo >> 24) & 0xFF; frame.data[4]=(s.odo >> 16) & 0xFF;
                        frame.data[5]=(s.odo >> 8) & 0xFF; frame.data[6]=s.odo & 0xFF; break;
             default:   answer = false; break;

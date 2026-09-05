@@ -28,30 +28,36 @@ and, like a real ECU, does not answer a PID it lacks:
 |---|---|
 | `ice` | `04 05 0B 0C 0D 10 2F 42 46 A6` |
 | `ev` | `0D 42 46 5B A6` (no engine, no fuel) |
-| `hybrid` | `04 05 0B 0C 0D 10 2F 42 46 5B A6` |
+| `hybrid` | `04 05 0B 0C 0D 0F 10 11 2F 33 42 46 5B 5C A6` |
 
 `ev` and `hybrid` add a battery/drive ECU answering UDS `0x22`
 ReadDataByIdentifier over ISO-TP on `0x7E4`/`0x7EC` (Linux `can-isotp`
-socket; load the module with `sudo modprobe can_isotp`). Its four DIDs
+socket; load the module with `sudo modprobe can_isotp`). Its DIDs
 carry pack voltage/current, state of charge/health, charging state, range,
-consumption, odometer, gear, power state, motor speed, motor power, and a
+consumption, odometer, gear, power state, motor speed, motor power, a
 driver-assist record (eco score, posted speed limit, collision risk, lane
-state, lead-vehicle gap), all as multi-frame transfers. The record layouts are documented in
+state, lead-vehicle gap) and, for contract 1.2, cruise control and drive
+mode (`0x0105`), tires (`0x0106`), trip statistics (`0x0107`), the charge
+session (`0x0108`) and occupancy (`0x0109`), all as multi-frame transfers. The record layouts are documented in
 `car-can-proxy/docs/emulator-ev-profile.md`.
 
 | PID | Signal | netcat knob | Unit |
 |---|---|---|---|
 | `0x04` | engine load | `load <A>` | raw byte |
 | `0x05` | coolant temperature | `temp <A>` | raw byte (A - 40 = degC) |
-| `0x0B` | intake air temperature | `intake <A>` | raw byte |
+| `0x0B` | intake manifold pressure | `intake <kPa>` | kPa (raw byte A) |
 | `0x0C` | engine RPM | `rpm <A>` | raw byte A (rpm = A * 64) |
 | `0x0D` | vehicle speed | `speed <kmh>` | km/h |
+| `0x0F` (ice, hybrid) | intake air temperature | `iat <degC>` | degrees C |
 | `0x10` | MAF air flow | `flow <raw>` | raw 16-bit |
+| `0x11` (ice, hybrid) | throttle position | `throttle <pct>` | percent |
 | `0x2F` | fuel tank level | `fuel <pct>` | percent |
+| `0x33` (ice, hybrid) | barometric pressure | `baro <kPa>` | kPa |
 | `0x42` | control module voltage | `volt <V>` | volts |
 | `0x46` | ambient air temperature | `ambient <degC>` | degrees C |
 | `0xA6` | odometer | `odo <km>` | km |
 | `0x5B` (ev, hybrid) | hybrid battery pack remaining life | (follows `soc`) | percent |
+| `0x5C` (ice, hybrid) | engine oil temperature | `oilt <degC>` | degrees C |
 | `0x420` (broadcast, 100 ms) | telltale bitmask, 32-bit little-endian | `tt <mask>` | hex or decimal |
 
 Battery ECU knobs (`ev`, `hybrid`): `soc <pct>`, `soh <pct>`, `packv <V>`,
@@ -59,6 +65,12 @@ Battery ECU knobs (`ev`, `hybrid`): `soc <pct>`, `soh <pct>`, `packv <V>`,
 `gear <P|R|N|D|L>`, `pwr <0-3>`, `mrpm <rpm>`, `power <kW>` (negative =
 regeneration). Driver-assist record (DID `0x0104`): `eco <0-100>`,
 `limit <km/h>` (0 = none known), `risk <0-3>`, `lane <mask>`, `gap <m>`.
+Contract 1.2 records (layouts in `car-can-proxy/docs/emulator-ev-profile.md`):
+cruise `cruise <0-3>`, `setspd <km/h>`, `gapset <0-4>`, `mode <0-7>`; tires
+`tp <bar>` (all four) or `tp0`..`tp3`, `ttire <degC>` or `ttire0`..`ttire3`;
+trip `tripkm`, `tripmin`, `tripavg <km/h>`, `tripfuel <L/100km>`; charge
+session `chgkw`, `chgtarget <pct>`, `chgmin`, `plug <0-2>`; occupancy
+`belts`, `seats`, `doors`, `windows` (bit masks, hex accepted).
 `car` reads the current car type.
 
 A knob without a value reads the current setting; `reset` puts every knob
@@ -68,10 +80,15 @@ a proxy reading the emulator sees no link loss). The `speed`, `rpm`,
 semantics; the newer knobs take physical units.
 
 Defaults: `speed 88`, `rpm 12` (768 rpm), `temp 35` (-5 degC), `flow 1344`,
-`intake 0`, `load 0`, `fuel 75`, `volt 12.6`, `ambient 23`, `odo 10568.7`,
+`intake 100`, `load 0`, `fuel 75`, `volt 12.6`, `ambient 23`, `odo 10568.7`,
+`iat 30`, `throttle 0`, `baro 101`, `oilt 95`,
 `tt 0`; battery ECU `soc 80`, `soh 97`, `packv 388`, `packi 55`, `chg 0`,
 `range 290`, `cons 165`, `gear D`, `pwr 3`, `mrpm 6600`, `power 21.3`;
-driver assist `eco 78`, `limit 50`, `risk 0`, `lane 3`, `gap 42`.
+driver assist `eco 78`, `limit 50`, `risk 0`, `lane 3`, `gap 42`;
+contract 1.2 `cruise 0`, `setspd 0`, `gapset 0`, `mode 0`, `tp 2.3 2.3 2.2 2.2`,
+`ttire 35 35 33 33`, `tripkm 12.3`, `tripmin 18`, `tripavg 41`, `tripfuel 6.5`,
+`chgkw 0`, `chgtarget 80`, `chgmin 0`, `plug 0`, `belts 0x03`, `seats 0x03`,
+`doors 0`, `windows 0`.
 
 Telltale bits 0-11: engine, oil, battery, brake, left, right, high beam, door,
 seatbelt, ABS, traction, TPMS. Bits 12-19 are the EV/hybrid lamps defined by
