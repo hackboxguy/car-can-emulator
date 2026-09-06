@@ -61,6 +61,7 @@ bool DriveCycle::load(const std::string &path, DriveCycle &out, std::string &err
         if (key == "tick_ms") { if (!(ss >> out.tickMs) || out.tickMs < 10 || out.tickMs > 1000) return bad("tick_ms 10..1000"); }
         else if (key == "fuel_start") { if (!(ss >> out.fuelStart)) return bad("fuel_start"); }
         else if (key == "fuel_end") { if (!(ss >> out.fuelEnd)) return bad("fuel_end"); }
+        else if (key == "soc_end") { if (!(ss >> out.socEnd)) return bad("soc_end"); }
         else if (key == "soc_start") { if (!(ss >> out.socStart)) return bad("soc_start"); }
         else if (key == "odometer_start") { if (!(ss >> out.odometerStart)) return bad("odometer_start"); }
         else if (key == "phase") {
@@ -140,8 +141,12 @@ void drive_cycle_thread(DriveCycle cycle)
         powerFiltered += (target - powerFiltered) * alpha;
         const double flow = clampd(std::round(powerFiltered), -100.0, 100.0);
         const double powerKw = flow / 100.0 * 90.0;
-        const double kWh = (powerFiltered / 100.0) * 90.0 * dtHours;
-        soc = clampd(soc - (kWh / 60.0) * 100.0, 0.0, 100.0);
+        // Charge follows the lap the way fuel does, socStart down to socEnd
+        // and back at the top of the next one. It used to integrate power into
+        // a 60 kWh pack instead, which drains about 1.25%/min and never
+        // recovers: an hour into a run the pack sat clamped at 0 and the range
+        // readout with it, which is not a state the demo is meant to show.
+        soc = cycle.socStart - (cycle.socStart - cycle.socEnd) * lapElapsed / total;
         odometer += speed * dtHours;
         const double effTarget = 142.0 + (speed > 120.0 ? (speed - 120.0) * 0.5 : 0.0);
         efficiencyFiltered += (effTarget - efficiencyFiltered) * alpha;

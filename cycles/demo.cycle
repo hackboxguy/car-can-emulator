@@ -11,6 +11,7 @@ tick_ms 50
 fuel_start 75
 fuel_end 60
 soc_start 80
+soc_end 66
 odometer_start 10568
 #      ms   spd0 spd1  rpm0 rpm1  tmp0 tmp1  set             clear
 phase  2000    0   40   800 2500    70   75  left,seatbelt   -

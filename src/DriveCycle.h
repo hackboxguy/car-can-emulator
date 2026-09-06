@@ -14,7 +14,7 @@ struct DrivePhase {
 
 struct DriveCycle {
     int tickMs = 50;
-    double fuelStart = 75, fuelEnd = 60, socStart = 80, odometerStart = 10568;
+    double fuelStart = 75, fuelEnd = 60, socStart = 80, socEnd = 66, odometerStart = 10568;
     std::vector<DrivePhase> phases;
     int totalMs() const;
 
