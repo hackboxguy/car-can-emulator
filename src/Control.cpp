@@ -119,10 +119,10 @@ void socket_listener()
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(g_controlPort);
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) { perror("Socket bind failed"); close(sockfd); return; }
     if (listen(sockfd, 3) < 0) { perror("Socket listen failed"); close(sockfd); return; }
-    std::cout << "Socket listener started on port 8080.\n";
+    std::cout << "Socket listener started on port " << g_controlPort << ".\n";
 
     while (g_running)
     {

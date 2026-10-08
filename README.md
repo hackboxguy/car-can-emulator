@@ -133,5 +133,8 @@ integration tests run this emulator on `vcan1` in all three car types.
 `src/main.cpp` arguments and threads; `src/State.*` the emulated car's
 values and served-PID set; `src/ObdEcu.cpp` the J1979 responder;
 `src/BmsEcu.cpp` the UDS/ISO-TP battery ECU; `src/Telltales.cpp` the
-`0x420` broadcast; `src/Control.cpp` the port-8080 knobs.
+`0x420` broadcast; `src/Control.cpp` the control-port knobs (port 8080 by default;
+`--control-port=N` or `CAR_CAN_EMULATOR_CONTROL_PORT=N` in the environment moves it - the
+micropanel image uses 8090, because Kodi's web interface and the pattern generator's remote
+control own 8080 there).
 
